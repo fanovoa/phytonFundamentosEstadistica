@@ -10,4 +10,9 @@ wheels/
 .venv
 
 # Dataset grande (>100MB): no subir a GitHub
-AdproPhyton/Unidad4/data/Consumer_behavior.csv
+AdproPhyton/Unidad4/Caso_9_ClusteringComprasTienda/data/Consumer_behavior.csv
+
+# Datasets grandes de la Unidad 4 (viven solo en disco, NO se suben a GitHub)
+Consumer_behavior.csv
+Consumer_behavior.txt
+household_power_consumption.txt
