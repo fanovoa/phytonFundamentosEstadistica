@@ -1,0 +1,13 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Dataset grande (>100MB): no subir a GitHub
+AdproPhyton/Unidad4/data/Consumer_behavior.csv
