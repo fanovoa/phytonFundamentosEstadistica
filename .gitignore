@@ -14,5 +14,4 @@ AdproPhyton/Unidad4/Caso_9_ClusteringComprasTienda/data/Consumer_behavior.csv
 
 # Datasets grandes de la Unidad 4 (viven solo en disco, NO se suben a GitHub)
 Consumer_behavior.csv
-Consumer_behavior.txt
 household_power_consumption.txt
