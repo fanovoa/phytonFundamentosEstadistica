@@ -1,17 +1,51 @@
-# Python-generated files
+# ---------- Python ----------
 __pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
 *.egg-info
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Virtual environments
-.venv
+# Entornos virtuales (en cualquier subcarpeta)
+.venv/
+venv/
 
-# Dataset grande (>100MB): no subir a GitHub
-AdproPhyton/Unidad4/Caso_9_ClusteringComprasTienda/data/Consumer_behavior.csv
+# ---------- Node ----------
+node_modules/
+npm-debug.log*
 
-# Datasets grandes de la Unidad 4 (viven solo en disco, NO se suben a GitHub)
+# ---------- R / renv ----------
+# Librerías instaladas por renv: se reconstruyen con renv::restore() desde renv.lock
+avanzados_1/library/
+renv/library/
+renv/staging/
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*_cache/
+
+# ---------- Secretos ----------
+.env
+.env.*
+!.env.example
+
+# ---------- Editor / SO ----------
+.vscode/
+.idea/
+.vs/
+.DS_Store
+Thumbs.db
+desktop.ini
+~$*
+
+# ---------- Worktrees ----------
+.worktrees/
+
+# ---------- Datasets grandes (>100MB, viven solo en disco) ----------
 Consumer_behavior.csv
 household_power_consumption.txt
