@@ -1,0 +1,858 @@
+---
+title: "¿Influye nuestro estilo de vida en el rendimiento académico?"
+subtitle: "Análisis descriptivo, ACP y Biplot de 1 000 estudiantes · Actividad evaluable 1 · MEA1"
+author: "Víctor Fabián Novoa Rojas — Maestría en Inteligencia Artificial, Universidad de La Sabana"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    df_print: kable
+    fig_caption: true
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+# Lista de paquetes que usa el documento (política: solo los declarados, con prefijo paquete::función).
+paquetes <- c("dplyr", "tidyr", "purrr", "ggplot2", "scales", "ggrepel",
+              "patchwork", "Hmisc", "janitor", "knitr")
+# Detecta cuáles no están instalados.
+faltantes <- paquetes[!vapply(paquetes, requireNamespace, logical(1), quietly = TRUE)]
+# Instala únicamente los que falten (política de la sesión 2); no reinstala nada.
+if (length(faltantes) > 0) install.packages(faltantes, repos = "https://cloud.r-project.org")
+# Opciones globales de los bloques: código visible, sin warnings ni mensajes en el informe.
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center", out.width = "100%",
+                      fig.width = 9, fig.height = 5.5, dpi = 110)
+# Semilla fija: el ACP es determinista, pero se controla el entorno antes de analizar.
+set.seed(2402)
+# Carpeta donde se exportan las figuras a 300 dpi.
+dir.create("figuras", showWarnings = FALSE)
+# Formateador numérico común para las cifras del texto.
+fmt <- function(x, d = 2) formatC(round(x, d), format = "f", digits = d)
+```
+
+# Presentación
+
+## Pregunta de investigación
+
+> **¿Cómo se relacionan las horas de estudio y las horas de sueño con el CGPA de los estudiantes, y cómo varía esa relación según la carrera y el nivel de estrés?**
+
+La pregunta involucra dos cuantitativas explicativas (horas de estudio, horas de sueño), una respuesta cuantitativa (CGPA) y dos categóricas (carrera, nivel de estrés). No es cerrada, exige datos con variabilidad y se responde con medidas descriptivas, comparaciones entre grupos, correlaciones y un Análisis de Componentes Principales (ACP) resumido en un Biplot.
+
+## Justificación
+
+- **¿Por qué es interesante?** El rendimiento académico se suele atribuir a la dedicación, pero los hábitos de descanso y la tensión que acompaña al estudio también forman parte del día del estudiante. Describir cómo se combinan esas dimensiones aporta una mirada conjunta que una nota aislada no da.
+- **¿A quién beneficia?** A estudiantes, que pueden ubicar su propio perfil de hábitos; a docentes y bienestar universitario, que reciben una descripción de qué patrones acompañan a los promedios altos y bajos.
+- **¿Qué se aprende?** Qué variables del estilo de vida se asocian linealmente con el CGPA, cuáles no muestran asociación alguna y cómo se resume la estructura conjunta en dos ejes interpretables.
+- **¿Qué decisiones permite?** Priorizar qué hábitos vale la pena medir y seguir en programas de acompañamiento. El alcance es **descriptivo**: los resultados describen esta base, no demuestran causas ni se generalizan a una población.
+
+## Objetivos
+
+- **General:** describir la relación entre horas de estudio, horas de sueño y CGPA en una base de 1 000 estudiantes, y cómo varía según la carrera y el nivel de estrés.
+- **Específicos:** (1) comparar la distribución del CGPA entre carreras, niveles de estrés y perfiles de hábitos; (2) identificar qué variables presentan mayor asociación lineal con el CGPA y resumir la estructura conjunta mediante ACP y Biplot.
+
+## Unidad de análisis y tabla de variables
+
+Cada fila es **un estudiante**. No hay identificador ni variable de tiempo, y no hay medidas repetidas.
+
+```{r tabla-variables}
+# Tabla de variables con nombre limpio, etiqueta, tipo, unidad y rol dentro del análisis.
+tabla_variables <- data.frame(
+  Variable = c("age", "study_hours_per_day", "sleep_hours", "screen_time_hours",
+               "gym_hours_per_week", "attendance_percentage", "stress_level_1_to_10",
+               "internal_marks", "cgpa", "branch", "diet_type", "residence",
+               "nivel_estres", "perfil_habitos"),
+  Etiqueta = c("Edad", "Horas de estudio por día", "Horas de sueño por día",
+               "Horas de pantalla por día", "Horas de gimnasio por semana",
+               "Asistencia", "Nivel de estrés", "Notas internas", "CGPA",
+               "Carrera", "Tipo de dieta", "Residencia",
+               "Nivel de estrés en 3 niveles", "Perfil estudio × sueño"),
+  Tipo = c("Cuantitativa discreta", rep("Cuantitativa continua", 8),
+           rep("Cualitativa nominal", 3), "Cualitativa ordinal (derivada)",
+           "Cualitativa nominal (derivada)"),
+  Unidad = c("años", "horas", "horas", "horas", "horas", "%", "escala 1–10",
+             "puntos 0–100", "escala 0–10", "6 categorías", "2 categorías",
+             "2 categorías", "terciles de estrés", "medianas de estudio y sueño"),
+  Rol = c("Descriptiva, no activa en ACP", "Explicativa, activa en ACP",
+          "Explicativa, activa en ACP", "Descriptiva, no activa en ACP",
+          "Descriptiva, no activa en ACP", "Activa en ACP", "Activa en ACP",
+          "Activa en ACP", "Respuesta, activa en ACP", "Grupo a priori",
+          "Grupo a priori", "Grupo a priori", "Grupo derivado (Biplot A)",
+          "Grupo derivado (Biplot B)"),
+  check.names = FALSE
+)
+knitr::kable(tabla_variables, caption = "Variables de la base y rol en el análisis.")
+```
+
+**Conteo de la validación previa:** 9 cuantitativas y 3 cualitativas reales más 2 derivadas declaradas. Supera el mínimo de la guía (2 y 2) y el mínimo de este proyecto (3 y 3). Las variables "activas en ACP" se deciden en la sección de relaciones bivariadas: solo entran las que muestran asociación lineal con alguna otra.
+
+# Preparación del entorno
+
+```{r entorno}
+# Vector de etiquetas en español para tablas (nombre limpio → etiqueta larga).
+etiquetas <- c(
+  age = "Edad (años)", study_hours_per_day = "Horas de estudio por día",
+  sleep_hours = "Horas de sueño por día", screen_time_hours = "Horas de pantalla por día",
+  gym_hours_per_week = "Horas de gimnasio por semana", attendance_percentage = "Asistencia (%)",
+  stress_level_1_to_10 = "Nivel de estrés (1–10)", internal_marks = "Notas internas (0–100)",
+  cgpa = "CGPA (0–10)", branch = "Carrera", diet_type = "Tipo de dieta",
+  residence = "Residencia", nivel_estres = "Nivel de estrés (derivado)",
+  perfil_habitos = "Perfil estudio × sueño (derivado)"
+)
+# Etiquetas cortas para los ejes de los gráficos (menos texto = menos ruido).
+etiquetas_cortas <- c(
+  age = "Edad", study_hours_per_day = "Estudio (h/día)", sleep_hours = "Sueño (h/día)",
+  screen_time_hours = "Pantalla (h/día)", gym_hours_per_week = "Gimnasio (h/sem)",
+  attendance_percentage = "Asistencia (%)", stress_level_1_to_10 = "Estrés (1–10)",
+  internal_marks = "Notas internas", cgpa = "CGPA"
+)
+# Paleta secuencial para el nivel de estrés (ordinal: claro → oscuro).
+paleta_estres <- c(Bajo = "#9ECAE1", Medio = "#4292C6", Alto = "#08306B")
+# Paleta cualitativa (Okabe-Ito, distinguible con daltonismo) para los cuatro perfiles.
+paleta_perfil <- c("Estudia- Duerme-" = "#D55E00", "Estudia- Duerme+" = "#E69F00",
+                   "Estudia+ Duerme-" = "#56B4E9", "Estudia+ Duerme+" = "#009E73")
+# Tema gráfico común: minimalista, sin cuadrícula menor.
+tema_base <- ggplot2::theme_minimal(base_size = 12) +
+  ggplot2::theme(panel.grid.minor = ggplot2::element_blank(),
+                 plot.title.position = "plot",
+                 plot.caption = ggplot2::element_text(hjust = 0, colour = "grey40"))
+```
+
+**Análisis del resultado.** El entorno queda controlado antes de tocar los datos: paquetes declarados una sola vez, semilla fija, etiquetas y paletas definidas con significado (secuencial para una escala ordinal, cualitativa para perfiles sin orden). Ningún bloque posterior instala paquetes.
+
+# Carga de la base y unidad de análisis
+
+```{r carga}
+# Lee el archivo CSV tal como fue entregado.
+datos_crudos <- read.csv("student_lifestyle_performance_dataset.csv", stringsAsFactors = FALSE)
+# Limpia los nombres de columna a snake_case.
+datos <- janitor::clean_names(datos_crudos)
+# Guarda el tamaño original para el reporte de depuración.
+n_original <- nrow(datos)
+# Muestra dimensiones y nombres limpios.
+dim(datos)
+names(datos)
+```
+
+**Análisis del resultado.** La base tiene `r n_original` filas y `r ncol(datos)` columnas. Una fila es un estudiante: no existe columna de identificación ni de tiempo, de modo que ninguna columna debe excluirse por ser identificador. Los nombres limpios (`cgpa`, `study_hours_per_day`, …) se usan en el código y las etiquetas en español en tablas y gráficos.
+
+# Estructura y tipos
+
+```{r estructura}
+# Categóricas reales de la base.
+categoricas <- c("branch", "diet_type", "residence")
+# Cuantitativas: todas las demás columnas.
+cuantitativas <- setdiff(names(datos), categoricas)
+# Tipifica las categóricas como factores para que no entren en medias, correlaciones ni ACP.
+datos <- datos |>
+  dplyr::mutate(dplyr::across(dplyr::all_of(categoricas), as.factor))
+# Verifica tipos: factores para las categóricas, numéricas para el resto.
+str(datos)
+```
+
+**Análisis del resultado.** Las tres categóricas quedan como factores y las nueve cuantitativas siguen numéricas. Dos observaciones sobre los "tipos reales": `age` es discreta (`r dplyr::n_distinct(datos$age)` valores enteros), y `stress_level_1_to_10`, a pesar de su nombre, **no es una escala Likert**: tiene `r dplyr::n_distinct(datos$stress_level_1_to_10)` valores distintos con decimales, por lo que se trata como continua. Ninguna variable categórica está almacenada como número.
+
+# Completitud, muestra analítica y advertencias sobre la base
+
+```{r completitud}
+# Cuenta faltantes por variable.
+faltantes_por_variable <- colSums(is.na(datos))
+faltantes_por_variable
+# Identifica filas completas respecto a todas las variables usadas.
+filas_completas <- complete.cases(datos)
+# Conserva la muestra analítica única que se usa en todo el documento.
+datos <- datos[filas_completas, , drop = FALSE]
+# Reporte de la depuración.
+n_final <- nrow(datos)
+n_eliminadas <- n_original - n_final
+# Filas duplicadas exactas.
+duplicadas <- sum(duplicated(datos))
+c(n_original = n_original, n_final = n_final, n_eliminadas = n_eliminadas, duplicadas = duplicadas)
+```
+
+**Análisis del resultado.** Total de faltantes: `r sum(faltantes_por_variable)`. Se conservan `r n_final` de `r n_original` estudiantes (`r n_eliminadas` excluidos, `r duplicadas` duplicados). La misma muestra se emplea en descriptiva, correlaciones y ACP.
+
+## Advertencias sobre la base
+
+```{r advertencias}
+# Para cada cuantitativa: cuántos valores caen exactamente en el mínimo y el máximo (recortes en los bordes).
+recortes <- purrr::map_dfr(cuantitativas, function(v) {
+  x <- datos[[v]]
+  data.frame(Variable = etiquetas[[v]], Mínimo = min(x), `n en el mínimo` = sum(x == min(x)),
+             Máximo = max(x), `n en el máximo` = sum(x == max(x)),
+             `Valores distintos` = dplyr::n_distinct(x), check.names = FALSE)
+})
+knitr::kable(recortes, caption = "Recortes en los bordes y número de valores distintos.")
+# Consistencia interna: ¿algún estudiante suma más de 24 horas diarias entre estudio, sueño y pantalla?
+horas_imposibles <- sum(datos$study_hours_per_day + datos$sleep_hours + datos$screen_time_hours > 24)
+# ¿El estrés es casi una combinación lineal de estudio y sueño? (R² alto delata un generador simulado)
+r2_estres <- summary(lm(stress_level_1_to_10 ~ study_hours_per_day + sleep_hours, data = datos))$r.squared
+# ¿El CGPA es casi combinación lineal de las demás cuantitativas?
+r2_cgpa <- summary(lm(cgpa ~ ., data = datos[cuantitativas]))$r.squared
+c(horas_imposibles = horas_imposibles, r2_estres = round(r2_estres, 3), r2_cgpa = round(r2_cgpa, 3))
+```
+
+**Análisis del resultado.** No hay sumas imposibles de horas (`r horas_imposibles` casos con más de 24 h). Sin embargo, varias señales apuntan a una **base simulada o recortada**: `r recortes[recortes$Variable == "Edad (años)", "n en el mínimo"]` estudiantes en la edad mínima y `r recortes[recortes$Variable == "Edad (años)", "n en el máximo"]` en la máxima (distribución plana), `r recortes[recortes$Variable == "Horas de gimnasio por semana", "n en el mínimo"]` con exactamente 0 h de gimnasio, `r recortes[recortes$Variable == "Nivel de estrés (1–10)", "n en el mínimo"]` con estrés exactamente 1, un estrés "de 1 a 10" con decimales, y un R² de `r fmt(r2_estres)` al expresar el estrés como función lineal de estudio y sueño (el CGPA alcanza `r fmt(r2_cgpa)` frente a todas las demás). Estas señales no invalidan el ejercicio descriptivo, pero obligan a leer los resultados como propiedades **de esta base**, no de estudiantes reales.
+
+# Alcance de la pregunta
+
+La pregunta se formuló antes de calcular o graficar. El alcance es descriptivo: se reportan frecuencias, medidas de centro y dispersión, comparaciones de grupos por solapamiento, correlaciones y un ACP interpretado hasta los centroides. No se estiman intervalos, no se prueban hipótesis y no se afirma causalidad. "Rendimiento" se mide con el **CGPA** (promedio acumulado 0–10); las notas internas se conservan como medida intermedia.
+
+# Variables cualitativas
+
+## Categóricas derivadas (declaradas)
+
+```{r derivadas}
+# Terciles del estrés → tres niveles equilibrados; corte descriptivo, no clínico.
+cortes_estres <- quantile(datos$stress_level_1_to_10, probs = c(0, 1/3, 2/3, 1))
+datos$nivel_estres <- cut(datos$stress_level_1_to_10, breaks = cortes_estres,
+                          include.lowest = TRUE, labels = c("Bajo", "Medio", "Alto"),
+                          ordered_result = TRUE)
+# Medianas de estudio y sueño para el perfil 2 × 2.
+mediana_estudio <- median(datos$study_hours_per_day)
+mediana_sueno <- median(datos$sleep_hours)
+# Perfil: por encima (+) o por debajo (-) de la mediana en cada hábito.
+datos$perfil_habitos <- factor(
+  paste(ifelse(datos$study_hours_per_day >= mediana_estudio, "Estudia+", "Estudia-"),
+        ifelse(datos$sleep_hours >= mediana_sueno, "Duerme+", "Duerme-")),
+  levels = names(paleta_perfil)
+)
+# Todas las categóricas que se describen y comparan.
+categoricas_todas <- c(categoricas, "nivel_estres", "perfil_habitos")
+# Tabla de correspondencia de los cortes.
+data.frame(
+  Variable = c("Nivel de estrés", "Nivel de estrés", "Nivel de estrés", "Perfil estudio × sueño"),
+  Regla = c(sprintf("Bajo: estrés ≤ %.2f", cortes_estres[2]),
+            sprintf("Medio: %.2f < estrés ≤ %.2f", cortes_estres[2], cortes_estres[3]),
+            sprintf("Alto: estrés > %.2f", cortes_estres[3]),
+            sprintf("Estudia+ si estudio ≥ %.2f h; Duerme+ si sueño ≥ %.2f h", mediana_estudio, mediana_sueno))
+) |> knitr::kable(caption = "Reglas de construcción de las categóricas derivadas.")
+```
+
+**Análisis del resultado.** Los cortes son **descriptivos**: los terciles garantizan grupos de tamaño similar y las medianas dividen cada hábito en mitades. Ninguno es un umbral clínico ni pedagógico. Estas variables se construyen a partir de cuantitativas que después entrarán al ACP, lo que se tendrá en cuenta al leer el Biplot.
+
+## Frecuencias
+
+```{r frecuencias}
+# Frecuencia absoluta, relativa y porcentaje para las cinco categóricas.
+tabla_frecuencias <- purrr::map_dfr(categoricas_todas, function(v) {
+  datos |>
+    dplyr::count(Categoria = .data[[v]], name = "Frecuencia") |>
+    dplyr::mutate(Variable = etiquetas[[v]],
+                  Categoria = as.character(Categoria),
+                  `Frec. relativa` = Frecuencia / sum(Frecuencia),
+                  Porcentaje = scales::percent(`Frec. relativa`, accuracy = 0.1)) |>
+    dplyr::select(Variable, Categoria, Frecuencia, `Frec. relativa`, Porcentaje)
+})
+knitr::kable(tabla_frecuencias, digits = 3, caption = "Frecuencias de las variables cualitativas.")
+# Categoría dominante y minoritaria por variable.
+dominantes <- tabla_frecuencias |> dplyr::group_by(Variable) |> dplyr::slice_max(Frecuencia, n = 1, with_ties = FALSE)
+minoritarias <- tabla_frecuencias |> dplyr::group_by(Variable) |> dplyr::slice_min(Frecuencia, n = 1, with_ties = FALSE)
+```
+
+```{r barras, fig.height=7}
+# Orden de niveles para que las barras respeten el orden natural de cada variable.
+niveles_grupos <- unique(unlist(lapply(datos[categoricas_todas], levels)))
+# Barras horizontales facetadas por variable; el texto muestra el porcentaje.
+grafico_barras <- tabla_frecuencias |>
+  dplyr::mutate(Categoria = factor(Categoria, levels = rev(niveles_grupos)),
+                Variable = factor(Variable, levels = etiquetas[categoricas_todas])) |>
+  ggplot2::ggplot(ggplot2::aes(x = Frecuencia, y = Categoria)) +
+  ggplot2::geom_col(fill = "#4C78A8", width = 0.7) +
+  ggplot2::geom_text(ggplot2::aes(label = Porcentaje), hjust = -0.1, size = 3.2) +
+  ggplot2::facet_wrap(~ Variable, scales = "free_y", ncol = 2) +
+  ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0, 0.25))) +
+  ggplot2::labs(title = "Composición de la base según las variables cualitativas",
+                subtitle = paste0("n = ", n_final, " estudiantes; el texto indica el porcentaje de cada categoría"),
+                x = "Número de estudiantes", y = NULL) +
+  tema_base
+grafico_barras
+# Exporta a 300 dpi para las láminas.
+ggplot2::ggsave("figuras/06_barras_categoricas.png", grafico_barras, width = 9, height = 7, dpi = 300)
+```
+
+**Análisis del resultado.** Las categóricas a priori están **equilibradas**: la carrera dominante es `r dominantes$Categoria[dominantes$Variable == "Carrera"]` (`r dominantes$Porcentaje[dominantes$Variable == "Carrera"]`) y la minoritaria `r minoritarias$Categoria[minoritarias$Variable == "Carrera"]` (`r minoritarias$Porcentaje[minoritarias$Variable == "Carrera"]`); residencia se reparte casi por mitades y la dieta vegetariana domina con `r dominantes$Porcentaje[dominantes$Variable == "Tipo de dieta"]`. Las derivadas son equilibradas por construcción. Ninguna categoría es tan pequeña que exija moderar las conclusiones.
+
+# Variables cuantitativas: centro, dispersión y posición
+
+```{r resumen-cuantitativas}
+# Función de resumen: media, mediana, DE, varianza, cuartiles, IQR, extremos, rango y separación media-mediana en DE.
+resumen_variable <- function(x) {
+  c(Media = mean(x), Mediana = median(x), DE = sd(x), Varianza = var(x),
+    Q1 = unname(quantile(x, 0.25)), Q3 = unname(quantile(x, 0.75)), IQR = IQR(x),
+    Mínimo = min(x), Máximo = max(x), Rango = diff(range(x)),
+    `(Media − Mediana)/DE` = (mean(x) - median(x)) / sd(x))
+}
+# Aplica la función a las nueve cuantitativas y transpone para tener una fila por variable.
+tabla_resumen <- t(vapply(datos[cuantitativas], resumen_variable, numeric(11)))
+rownames(tabla_resumen) <- etiquetas[cuantitativas]
+knitr::kable(tabla_resumen, digits = 2, caption = "Resumen numérico de las variables cuantitativas.")
+# Clase modal de Sturges para las continuas (la moda del valor exacto carece de sentido con cientos de valores distintos).
+clase_modal <- vapply(cuantitativas, function(v) {
+  h <- hist(datos[[v]], breaks = "Sturges", plot = FALSE)
+  i <- which.max(h$counts)
+  sprintf("[%s, %s) con %d estudiantes", format(h$breaks[i]), format(h$breaks[i + 1]), h$counts[i])
+}, character(1))
+knitr::kable(data.frame(Variable = etiquetas[cuantitativas], `Clase modal (Sturges)` = clase_modal,
+                        check.names = FALSE, row.names = NULL),
+             caption = "Clase modal de cada variable.")
+# Moda exacta solo para la variable discreta (edad), con su frecuencia y empates.
+moda_edad <- datos |> dplyr::count(age, sort = TRUE) |> dplyr::slice_max(n, with_ties = TRUE)
+moda_edad
+```
+
+**Análisis del resultado.** El CGPA promedia `r fmt(tabla_resumen["CGPA (0–10)", "Media"])` (mediana `r fmt(tabla_resumen["CGPA (0–10)", "Mediana"])`, DE `r fmt(tabla_resumen["CGPA (0–10)", "DE"])`), con el 50 % central entre `r fmt(tabla_resumen["CGPA (0–10)", "Q1"])` y `r fmt(tabla_resumen["CGPA (0–10)", "Q3"])`. Los estudiantes estudian en promedio `r fmt(tabla_resumen["Horas de estudio por día", "Media"])` h y duermen `r fmt(tabla_resumen["Horas de sueño por día", "Media"])` h. En todas las variables la separación media–mediana es menor de `r fmt(max(abs(tabla_resumen[, "(Media − Mediana)/DE"])))` DE, compatible con simetría; la mayor corresponde a gimnasio (`r fmt(tabla_resumen["Horas de gimnasio por semana", "(Media − Mediana)/DE"])` DE, media por encima de la mediana: cola derecha). La moda exacta solo se reporta para la edad (`r paste(moda_edad$age, collapse = " y ")` años, `r paste(moda_edad$n, collapse = " y ")` estudiantes); para las continuas se usa la clase modal. Las DE no se comparan entre variables porque las unidades difieren; el ACP resolverá eso estandarizando.
+
+# Forma de las distribuciones
+
+```{r forma}
+# Coeficiente de asimetría por momentos: m3 / m2^(3/2).
+coef_asimetria <- function(x) { m <- mean(x); mean((x - m)^3) / mean((x - m)^2)^1.5 }
+# Exceso de curtosis: m4 / m2^2 − 3.
+exceso_curtosis <- function(x) { m <- mean(x); mean((x - m)^4) / mean((x - m)^2)^2 - 3 }
+# Conteo de valores fuera de los bigotes (regla 1.5·IQR).
+extremos_iqr <- function(x) { q <- quantile(x, c(0.25, 0.75)); i <- IQR(x); sum(x < q[1] - 1.5 * i | x > q[2] + 1.5 * i) }
+# Tabla de forma para las nueve cuantitativas.
+tabla_forma <- data.frame(
+  Variable = etiquetas[cuantitativas],
+  Asimetría = vapply(datos[cuantitativas], coef_asimetria, numeric(1)),
+  `Exceso de curtosis` = vapply(datos[cuantitativas], exceso_curtosis, numeric(1)),
+  `Clases Sturges` = vapply(datos[cuantitativas], function(x) as.integer(nclass.Sturges(x)), integer(1)),
+  `Extremos 1.5·IQR` = vapply(datos[cuantitativas], extremos_iqr, integer(1)),
+  check.names = FALSE, row.names = NULL
+)
+knitr::kable(tabla_forma, digits = 3, caption = "Forma de las distribuciones y valores extremos.")
+# Tabla de frecuencias agrupadas (Sturges) para la variable respuesta.
+h_cgpa <- hist(datos$cgpa, breaks = "Sturges", plot = FALSE)
+tabla_sturges_cgpa <- data.frame(
+  Clase = paste0("[", format(h_cgpa$breaks[-length(h_cgpa$breaks)]), ", ", format(h_cgpa$breaks[-1]), ")"),
+  Frecuencia = h_cgpa$counts,
+  `Frec. relativa` = round(h_cgpa$counts / sum(h_cgpa$counts), 3),
+  `Frec. acumulada` = cumsum(h_cgpa$counts),
+  check.names = FALSE
+)
+knitr::kable(tabla_sturges_cgpa, caption = "Frecuencias agrupadas del CGPA con la regla de Sturges.")
+```
+
+```{r figura-forma, fig.height=11}
+# Formato largo: una fila por estudiante y variable.
+datos_largos <- datos |>
+  dplyr::select(dplyr::all_of(cuantitativas)) |>
+  tidyr::pivot_longer(dplyr::everything(), names_to = "Variable", values_to = "Valor") |>
+  dplyr::mutate(Variable = factor(etiquetas_cortas[Variable], levels = etiquetas_cortas))
+# Media y mediana por variable para las líneas de referencia.
+referencias <- datos_largos |>
+  dplyr::group_by(Variable) |>
+  dplyr::summarise(Media = mean(Valor), Mediana = median(Valor), .groups = "drop") |>
+  tidyr::pivot_longer(c(Media, Mediana), names_to = "Medida", values_to = "Valor")
+# Histograma en escala de densidad + curva de densidad + líneas de media y mediana, un panel por variable.
+grafico_histogramas <- datos_largos |>
+  ggplot2::ggplot(ggplot2::aes(x = Valor)) +
+  ggplot2::geom_histogram(ggplot2::aes(y = ggplot2::after_stat(density)), bins = 11,
+                          fill = "grey80", colour = "white") +
+  ggplot2::geom_density(colour = "#4C78A8", linewidth = 0.9) +
+  ggplot2::geom_vline(data = referencias, ggplot2::aes(xintercept = Valor, linetype = Medida),
+                      colour = "#D55E00", linewidth = 0.7) +
+  ggplot2::facet_wrap(~ Variable, scales = "free", ncol = 3) +
+  ggplot2::labs(title = "Forma de las distribuciones: histograma (11 clases de Sturges), densidad y centro",
+                x = NULL, y = "Densidad", linetype = NULL) +
+  tema_base + ggplot2::theme(legend.position = "top")
+# Boxplots con la media como rombo blanco, un panel por variable.
+grafico_cajas <- datos_largos |>
+  ggplot2::ggplot(ggplot2::aes(x = Valor, y = "")) +
+  ggplot2::geom_boxplot(fill = "grey90", outlier.colour = "#D55E00", outlier.alpha = 0.6, width = 0.5) +
+  ggplot2::stat_summary(fun = mean, geom = "point", shape = 23, size = 3, fill = "white") +
+  ggplot2::facet_wrap(~ Variable, scales = "free_x", ncol = 3) +
+  ggplot2::labs(title = "Diagramas de caja: mediana, IQR, bigotes y extremos (1.5·IQR); rombo = media",
+                x = NULL, y = NULL) +
+  tema_base
+# Apila las dos figuras: forma arriba, cajas abajo.
+figura_forma <- grafico_histogramas / grafico_cajas + patchwork::plot_layout(heights = c(1.6, 1))
+figura_forma
+ggplot2::ggsave("figuras/08_forma_cuantitativas.png", figura_forma, width = 9, height = 11, dpi = 300)
+```
+
+**Análisis del resultado.** Leídas en secuencia histograma → media/mediana → boxplot: (1) todas las variables son unimodales o planas, sin huecos; la edad es **plana** (curtosis `r fmt(tabla_forma[tabla_forma$Variable == "Edad (años)", "Exceso de curtosis"])`, propia de una uniforme discreta) y gimnasio tiene cola derecha (asimetría `r fmt(tabla_forma[tabla_forma$Variable == "Horas de gimnasio por semana", "Asimetría"])`). (2) Media y mediana casi coinciden en las nueve variables. (3) Los boxplots muestran pocos extremos: `r tabla_forma[tabla_forma$Variable == "CGPA (0–10)", "Extremos 1.5·IQR"]` en CGPA y `r tabla_forma[tabla_forma$Variable == "Notas internas (0–100)", "Extremos 1.5·IQR"]` en notas internas, en ambas colas; son estudiantes con promedios muy altos o muy bajos, **no errores**, y no se eliminan. **Decisión:** por la simetría se reporta **media y DE** como medidas principales, con mediana e IQR de respaldo.
+
+# Comparación entre grupos
+
+```{r grupos}
+# Medianas de CGPA, estudio, sueño y estrés dentro de cada categoría de las cinco categóricas.
+tabla_grupos <- purrr::map_dfr(categoricas_todas, function(v) {
+  datos |>
+    dplyr::group_by(Grupo = as.character(.data[[v]])) |>
+    dplyr::summarise(n = dplyr::n(),
+                     `CGPA mediana` = median(cgpa), `CGPA media` = mean(cgpa), `CGPA DE` = sd(cgpa),
+                     `Estudio mediana` = median(study_hours_per_day),
+                     `Sueño mediana` = median(sleep_hours),
+                     `Estrés mediana` = median(stress_level_1_to_10), .groups = "drop") |>
+    dplyr::mutate(Variable = etiquetas[[v]]) |>
+    dplyr::select(Variable, dplyr::everything())
+})
+knitr::kable(tabla_grupos, digits = 2, caption = "Resumen del CGPA y de los hábitos por grupo.")
+# Rango de medianas de CGPA dentro de cada variable de agrupación (qué tanto separa cada una).
+rango_medianas <- tabla_grupos |>
+  dplyr::group_by(Variable) |>
+  dplyr::summarise(`Rango de medianas de CGPA` = max(`CGPA mediana`) - min(`CGPA mediana`), .groups = "drop") |>
+  dplyr::arrange(dplyr::desc(`Rango de medianas de CGPA`))
+knitr::kable(rango_medianas, digits = 2, caption = "Diferencia entre la mayor y la menor mediana de CGPA por variable de agrupación.")
+```
+
+```{r figura-grupos, fig.height=8}
+# Formato largo para facetar los boxplots de CGPA por cada categórica.
+datos_largos_grupos <- datos |>
+  dplyr::select(cgpa, dplyr::all_of(categoricas_todas)) |>
+  dplyr::mutate(dplyr::across(dplyr::all_of(categoricas_todas), as.character)) |>
+  tidyr::pivot_longer(-cgpa, names_to = "Variable", values_to = "Grupo") |>
+  dplyr::mutate(Variable = factor(etiquetas[Variable], levels = etiquetas[categoricas_todas]),
+                Grupo = factor(Grupo, levels = niveles_grupos))
+# Boxplots de CGPA por grupo; el rombo blanco es la media.
+grafico_grupos <- datos_largos_grupos |>
+  ggplot2::ggplot(ggplot2::aes(x = Grupo, y = cgpa)) +
+  ggplot2::geom_boxplot(fill = "grey90", outlier.alpha = 0.4, width = 0.6) +
+  ggplot2::stat_summary(fun = mean, geom = "point", shape = 23, size = 3, fill = "white") +
+  ggplot2::facet_wrap(~ Variable, scales = "free_x", ncol = 2) +
+  ggplot2::labs(title = "¿Cambia la distribución del CGPA según el grupo?",
+                subtitle = "Cajas solapadas indican que la variable de agrupación distingue poco; rombo = media",
+                x = NULL, y = "CGPA (0–10)") +
+  tema_base + ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 20, hjust = 1))
+grafico_grupos
+ggplot2::ggsave("figuras/09_cgpa_por_grupos.png", grafico_grupos, width = 9, height = 8, dpi = 300)
+```
+
+**Análisis del resultado.** Las tres agrupaciones **a priori** apenas mueven el CGPA: entre carreras la mediana varía `r fmt(rango_medianas[rango_medianas$Variable == "Carrera", 2][[1]])` puntos y entre residencias `r fmt(rango_medianas[rango_medianas$Variable == "Residencia", 2][[1]])`; las cajas se solapan casi por completo. Las **derivadas** sí ordenan el CGPA: de Bajo a Alto estrés la mediana pasa de `r fmt(tabla_grupos[tabla_grupos$Grupo == "Bajo", "CGPA mediana"][[1]])` a `r fmt(tabla_grupos[tabla_grupos$Grupo == "Alto", "CGPA mediana"][[1]])`, y entre perfiles va de `r fmt(tabla_grupos[tabla_grupos$Grupo == "Estudia- Duerme-", "CGPA mediana"][[1]])` ("Estudia- Duerme-") a `r fmt(tabla_grupos[tabla_grupos$Grupo == "Estudia+ Duerme+", "CGPA mediana"][[1]])` ("Estudia+ Duerme+"), un rango de `r fmt(rango_medianas[rango_medianas$Variable == "Perfil estudio × sueño (derivado)", 2][[1]])` puntos. Aun así las cajas de perfiles vecinos se solapan: la diferencia es de promedios, no una separación individual. Lectura descriptiva: en esta base, estudiar y dormir por encima de la mediana **acompaña** promedios más altos; la carrera, la residencia y la dieta no.
+
+# Relaciones bivariadas y correlación
+
+```{r correlaciones}
+# Matrices de Pearson y Spearman con Hmisc::rcorr (misma muestra analítica).
+matriz_numerica <- as.matrix(datos[cuantitativas])
+r_pearson <- Hmisc::rcorr(matriz_numerica, type = "pearson")$r
+r_spearman <- Hmisc::rcorr(matriz_numerica, type = "spearman")$r
+# Pares únicos del triángulo superior, ordenados por magnitud de Pearson.
+pares <- which(upper.tri(r_pearson), arr.ind = TRUE)
+tabla_pares <- data.frame(
+  `Variable 1` = etiquetas_cortas[rownames(r_pearson)[pares[, 1]]],
+  `Variable 2` = etiquetas_cortas[colnames(r_pearson)[pares[, 2]]],
+  Pearson = r_pearson[pares], Spearman = r_spearman[pares], check.names = FALSE, row.names = NULL
+) |>
+  dplyr::mutate(`|Pearson − Spearman|` = abs(Pearson - Spearman)) |>
+  dplyr::arrange(dplyr::desc(abs(Pearson)))
+knitr::kable(head(tabla_pares, 10), digits = 3, caption = "Diez asociaciones más intensas (Pearson) y su Spearman.")
+# Par con mayor discrepancia Pearson-Spearman.
+par_discrepante <- tabla_pares |> dplyr::slice_max(`|Pearson − Spearman|`, n = 1)
+# Mayor |r| de cada variable con cualquier otra (excluida la diagonal).
+max_abs_r <- apply(abs(r_pearson) - diag(ncol(r_pearson)), 1, max)
+# Variables sin estructura lineal: ninguna correlación alcanza 0.10 en valor absoluto.
+sin_estructura <- names(max_abs_r)[max_abs_r < 0.10]
+round(max_abs_r, 3)
+```
+
+```{r figura-correlacion, fig.height=6.5}
+# Matriz de Pearson en formato largo para el mapa de calor.
+cor_larga <- as.data.frame(as.table(r_pearson)) |>
+  dplyr::mutate(Var1 = factor(etiquetas_cortas[as.character(Var1)], levels = etiquetas_cortas),
+                Var2 = factor(etiquetas_cortas[as.character(Var2)], levels = rev(etiquetas_cortas)))
+# Mapa de calor con el coeficiente escrito en cada celda.
+grafico_correlacion <- cor_larga |>
+  ggplot2::ggplot(ggplot2::aes(x = Var1, y = Var2, fill = Freq)) +
+  ggplot2::geom_tile(colour = "white") +
+  ggplot2::geom_text(ggplot2::aes(label = sprintf("%.2f", Freq)), size = 3.2) +
+  ggplot2::scale_fill_gradient2(low = "#B2182B", mid = "white", high = "#2166AC", limits = c(-1, 1), name = "Pearson") +
+  ggplot2::coord_equal() +
+  ggplot2::labs(title = "Matriz de correlaciones de Pearson",
+                subtitle = "Edad, pantalla y gimnasio no se asocian linealmente con ninguna otra variable",
+                x = NULL, y = NULL) +
+  tema_base + ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1), panel.grid = ggplot2::element_blank())
+grafico_correlacion
+ggplot2::ggsave("figuras/10_matriz_correlacion.png", grafico_correlacion, width = 9, height = 6.5, dpi = 300)
+```
+
+```{r figura-dispersion, fig.height=5}
+# Dispersión estudio–CGPA y sueño–CGPA, color = nivel de estrés (información, no decoración).
+grafico_estudio <- datos |>
+  ggplot2::ggplot(ggplot2::aes(x = study_hours_per_day, y = cgpa, colour = nivel_estres)) +
+  ggplot2::geom_point(alpha = 0.45, size = 1.6) +
+  ggplot2::geom_smooth(method = "lm", se = FALSE, colour = "black", linewidth = 0.8) +
+  ggplot2::scale_colour_manual(values = paleta_estres) +
+  ggplot2::labs(x = "Horas de estudio por día", y = "CGPA (0–10)", colour = "Nivel de estrés",
+                title = sprintf("Estudio y CGPA (r = %.2f)", r_pearson["study_hours_per_day", "cgpa"])) +
+  tema_base
+grafico_sueno <- datos |>
+  ggplot2::ggplot(ggplot2::aes(x = sleep_hours, y = cgpa, colour = nivel_estres)) +
+  ggplot2::geom_point(alpha = 0.45, size = 1.6) +
+  ggplot2::geom_smooth(method = "lm", se = FALSE, colour = "black", linewidth = 0.8) +
+  ggplot2::scale_colour_manual(values = paleta_estres) +
+  ggplot2::labs(x = "Horas de sueño por día", y = NULL, colour = "Nivel de estrés",
+                title = sprintf("Sueño y CGPA (r = %.2f)", r_pearson["sleep_hours", "cgpa"])) +
+  tema_base
+# Dos paneles lado a lado con una sola leyenda.
+figura_dispersion <- (grafico_estudio | grafico_sueno) +
+  patchwork::plot_layout(guides = "collect") &
+  ggplot2::theme(legend.position = "bottom")
+figura_dispersion
+ggplot2::ggsave("figuras/10_dispersion_estudio_sueno_cgpa.png", figura_dispersion, width = 10, height = 5, dpi = 300)
+```
+
+**Análisis del resultado.** La asociación más intensa es `r tabla_pares[1, 1]`–`r tabla_pares[1, 2]` (r = `r fmt(tabla_pares$Pearson[1])`), seguida de `r tabla_pares[2, 1]`–`r tabla_pares[2, 2]` (`r fmt(tabla_pares$Pearson[2])`). El CGPA se asocia positivamente con el sueño (`r fmt(r_pearson["sleep_hours", "cgpa"])`) y con el estudio (`r fmt(r_pearson["study_hours_per_day", "cgpa"])`) y débilmente en negativo con el estrés (`r fmt(r_pearson["stress_level_1_to_10", "cgpa"])`). El estrés, a su vez, sube con el estudio (`r fmt(r_pearson["study_hours_per_day", "stress_level_1_to_10"])`) y baja con el sueño (`r fmt(r_pearson["sleep_hours", "stress_level_1_to_10"])`). Pearson y Spearman coinciden en todos los pares (mayor discrepancia `r fmt(par_discrepante[["|Pearson − Spearman|"]], 3)` en `r par_discrepante[[1]]`–`r par_discrepante[[2]]`), así que las relaciones son aproximadamente lineales y las nubes de puntos lo confirman: el color revela además que los estudiantes de estrés alto se concentran en las horas altas de estudio y bajas de sueño. Tres variables (`r paste(etiquetas_cortas[sin_estructura], collapse = ", ")`) no alcanzan |r| = 0.10 con ninguna otra. **Decisión para el ACP:** la redundancia entre estudio, asistencia, estrés, sueño, notas internas y CGPA motiva resumirlas en pocas componentes; las tres variables sin estructura **se excluyen como activas** porque no aportan covariación (solo añadirían ruido al plano) y quedan descritas en las secciones anteriores.
+
+# Análisis de Componentes Principales
+
+```{r acp}
+# Variables activas: las seis con estructura correlacional.
+variables_activas <- c("study_hours_per_day", "sleep_hours", "attendance_percentage",
+                       "stress_level_1_to_10", "internal_marks", "cgpa")
+matriz_activa <- datos[variables_activas]
+# Verificación previa: ninguna variable puede tener DE nula o no disponible.
+desviaciones <- vapply(matriz_activa, sd, numeric(1))
+if (any(is.na(desviaciones) | desviaciones == 0)) stop("Hay variables sin varianza: no se puede estandarizar.")
+# Único ajuste del ACP en todo el documento: centrado y estandarizado (escalas incompatibles: horas, %, puntos).
+acp_habitos <- prcomp(matriz_activa, center = TRUE, scale. = TRUE)
+# El signo de cada componente es arbitrario: se orienta CP1 para que el CGPA cargue positivo
+# y CP2 para que el estrés cargue positivo. Es un cambio de signo, no de geometría.
+signo_cp1 <- ifelse(acp_habitos$rotation["cgpa", 1] < 0, -1, 1)
+signo_cp2 <- ifelse(acp_habitos$rotation["stress_level_1_to_10", 2] < 0, -1, 1)
+acp_habitos$rotation[, 1] <- signo_cp1 * acp_habitos$rotation[, 1]
+acp_habitos$x[, 1] <- signo_cp1 * acp_habitos$x[, 1]
+acp_habitos$rotation[, 2] <- signo_cp2 * acp_habitos$rotation[, 2]
+acp_habitos$x[, 2] <- signo_cp2 * acp_habitos$x[, 2]
+# Valores propios, proporción de varianza y acumulada.
+valores_propios <- acp_habitos$sdev^2
+proporcion_varianza <- valores_propios / sum(valores_propios)
+acumulada <- cumsum(proporcion_varianza)
+# Criterios de retención.
+n_kaiser <- sum(valores_propios > 1)
+n_80 <- which(acumulada >= 0.80)[1]
+porcentaje_plano <- 100 * sum(proporcion_varianza[1:2])
+tabla_varianza <- data.frame(Componente = paste0("CP", seq_along(valores_propios)),
+                             `Valor propio` = valores_propios,
+                             `% varianza` = 100 * proporcion_varianza,
+                             `% acumulado` = 100 * acumulada, check.names = FALSE)
+knitr::kable(tabla_varianza, digits = 2, caption = "Valores propios y varianza explicada.")
+```
+
+```{r scree, fig.height=4.5}
+# Scree plot: valores propios por componente; la línea en 1 es la referencia de Kaiser.
+grafico_scree <- tabla_varianza |>
+  ggplot2::ggplot(ggplot2::aes(x = Componente, y = `Valor propio`, group = 1)) +
+  ggplot2::geom_line(colour = "grey50") +
+  ggplot2::geom_point(size = 3, colour = "#4C78A8") +
+  ggplot2::geom_hline(yintercept = 1, linetype = "dashed", colour = "#D55E00") +
+  ggplot2::geom_text(ggplot2::aes(label = sprintf("%.1f %%", `% varianza`)), vjust = -1, size = 3.3) +
+  ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0.05, 0.2))) +
+  ggplot2::labs(title = "Scree plot del ACP",
+                subtitle = "Línea discontinua: criterio de Kaiser (valor propio = 1); el texto indica el % de varianza",
+                x = NULL, y = "Valor propio (varianza de la componente)") +
+  tema_base
+grafico_scree
+ggplot2::ggsave("figuras/11_scree.png", grafico_scree, width = 9, height = 4.5, dpi = 300)
+```
+
+**Análisis del resultado.** Se estandariza (`scale. = TRUE`) porque horas, porcentajes y puntos no comparten escala: sin ello la asistencia (DE `r fmt(desviaciones["attendance_percentage"], 1)`) dominaría la primera componente. Los valores propios son `r paste(fmt(valores_propios), collapse = ", ")`. **Kaiser** retiene `r n_kaiser` componentes, el **criterio del 80 %** exige `r n_80`, y el **scree plot** muestra el codo en la tercera componente. Los tres criterios coinciden: dos componentes describen y visualizan la estructura conservando el **`r fmt(porcentaje_plano, 1)` %** de la varianza total (CP1 `r fmt(100 * proporcion_varianza[1], 1)` %, CP2 `r fmt(100 * proporcion_varianza[2], 1)` %). El plano CP1–CP2 es, por tanto, una representación de alta calidad.
+
+# Interpretación de las componentes
+
+```{r componentes}
+# Rotaciones: coeficientes de los vectores propios (no son correlaciones ni porcentajes).
+rotaciones <- acp_habitos$rotation[, 1:2]
+# Correlaciones variable–componente: rotación × desviación de la componente.
+cor_var_pc <- sweep(acp_habitos$rotation, 2, acp_habitos$sdev, "*")
+# Contribuciones: 100 · rotación²; suman 100 % dentro de cada componente.
+contribuciones <- 100 * acp_habitos$rotation^2
+# Tabla conjunta de los tres conceptos para CP1 y CP2.
+tabla_cargas <- data.frame(
+  Variable = etiquetas_cortas[variables_activas],
+  `Rotación CP1` = rotaciones[, 1], `Rotación CP2` = rotaciones[, 2],
+  `Correlación CP1` = cor_var_pc[, 1], `Correlación CP2` = cor_var_pc[, 2],
+  `Contribución CP1 (%)` = contribuciones[, 1], `Contribución CP2 (%)` = contribuciones[, 2],
+  check.names = FALSE, row.names = NULL
+)
+knitr::kable(tabla_cargas, digits = 3, caption = "Rotaciones, correlaciones variable–componente y contribuciones.")
+# Variables ordenadas por |correlación| en cada componente.
+orden_cp1 <- variables_activas[order(abs(cor_var_pc[, 1]), decreasing = TRUE)]
+orden_cp2 <- variables_activas[order(abs(cor_var_pc[, 2]), decreasing = TRUE)]
+# Nombres sustantivos de las componentes, definidos a partir de las cargas y usados en todos los gráficos.
+nombre_cp1 <- "dedicación y desempeño"
+nombre_cp2 <- "tensión frente a descanso"
+```
+
+```{r figura-cargas, fig.height=6.5}
+# Círculo de correlaciones: cada variable como flecha (cor CP1, cor CP2) dentro del círculo unitario.
+coordenadas_cargas <- data.frame(Variable = etiquetas_cortas[variables_activas],
+                                 CP1 = cor_var_pc[, 1], CP2 = cor_var_pc[, 2])
+circulo <- data.frame(t = seq(0, 2 * pi, length.out = 200)) |> dplyr::mutate(x = cos(t), y = sin(t))
+grafico_cargas <- ggplot2::ggplot() +
+  ggplot2::geom_path(data = circulo, ggplot2::aes(x = x, y = y), colour = "grey70") +
+  ggplot2::geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
+  ggplot2::geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+  ggplot2::geom_segment(data = coordenadas_cargas, ggplot2::aes(x = 0, y = 0, xend = CP1, yend = CP2),
+                        arrow = grid::arrow(length = grid::unit(0.22, "cm"), type = "closed"),
+                        linewidth = 0.9, colour = "#08306B") +
+  ggrepel::geom_text_repel(data = coordenadas_cargas, ggplot2::aes(x = CP1, y = CP2, label = Variable),
+                           fontface = "bold", size = 3.8, max.overlaps = Inf) +
+  ggplot2::coord_equal(xlim = c(-1.1, 1.1), ylim = c(-1.1, 1.1)) +
+  ggplot2::labs(title = "Círculo de correlaciones variable–componente",
+                subtitle = "Flechas largas = variable bien representada en el plano; ángulo pequeño = asociación positiva",
+                x = sprintf("CP1 · %s (%.1f %%)", nombre_cp1, 100 * proporcion_varianza[1]),
+                y = sprintf("CP2 · %s (%.1f %%)", nombre_cp2, 100 * proporcion_varianza[2])) +
+  tema_base
+grafico_cargas
+ggplot2::ggsave("figuras/12_cargas_cp1_cp2.png", grafico_cargas, width = 8, height = 8, dpi = 300)
+```
+
+**Análisis del resultado.** Los tres conceptos de la tabla son distintos: la rotación es el coeficiente del vector propio, la correlación mide asociación variable–componente y la contribución dice qué proporción de la dirección procede de cada variable. Para nombrar se usan las **correlaciones**:
+
+- **CP1 = `r nombre_cp1`.** Correlaciones: CGPA `r fmt(cor_var_pc["cgpa", 1])`, notas internas `r fmt(cor_var_pc["internal_marks", 1])`, horas de estudio `r fmt(cor_var_pc["study_hours_per_day", 1])`, asistencia `r fmt(cor_var_pc["attendance_percentage", 1])`, sueño `r fmt(cor_var_pc["sleep_hours", 1])`; el estrés casi no participa (`r fmt(cor_var_pc["stress_level_1_to_10", 1])`, contribución `r fmt(contribuciones["stress_level_1_to_10", 1], 1)` %). Un valor alto en CP1 describe a un estudiante que estudia, asiste y obtiene notas altas.
+- **CP2 = `r nombre_cp2`.** Correlaciones: estrés `r fmt(cor_var_pc["stress_level_1_to_10", 2])`, sueño `r fmt(cor_var_pc["sleep_hours", 2])`, estudio `r fmt(cor_var_pc["study_hours_per_day", 2])`, asistencia `r fmt(cor_var_pc["attendance_percentage", 2])`; CGPA y notas internas cargan en negativo (`r fmt(cor_var_pc["cgpa", 2])`, `r fmt(cor_var_pc["internal_marks", 2])`). Un valor alto en CP2 describe a quien estudia mucho, duerme poco y reporta más estrés; la componente **opone** la tensión al descanso.
+
+El **signo es arbitrario**: se orientó CP1 hacia el CGPA alto y CP2 hacia el estrés alto solo para facilitar la lectura; otra instalación de R podría invertirlos sin cambiar la geometría, por lo que la interpretación habla de oposiciones y no de "positivo" o "negativo" absolutos.
+
+# Construcción del Biplot
+
+```{r biplot-construccion}
+# Puntuaciones (scores) de cada estudiante en CP1 y CP2, con las variables de agrupación.
+puntuaciones <- data.frame(Estudiante = seq_len(n_final),
+                           CP1 = acp_habitos$x[, 1], CP2 = acp_habitos$x[, 2],
+                           nivel_estres = datos$nivel_estres, perfil_habitos = datos$perfil_habitos,
+                           branch = datos$branch, residence = datos$residence, diet_type = datos$diet_type)
+# Distancia al origen en el plano: perfil estandarizado alejado del centro.
+puntuaciones$Distancia <- sqrt(puntuaciones$CP1^2 + puntuaciones$CP2^2)
+# Se etiquetan solo los seis estudiantes más alejados.
+extremos <- puntuaciones[order(puntuaciones$Distancia, decreasing = TRUE)[1:6], ]
+# Coordenadas de las flechas: correlaciones variable–componente.
+coordenadas_variables <- data.frame(Variable = etiquetas_cortas[variables_activas],
+                                    CP1 = cor_var_pc[, 1], CP2 = cor_var_pc[, 2])
+# Un único factor visual lleva las correlaciones (escala −1 a 1) al lienzo de los scores.
+factor_flechas <- 0.75 * min(max(abs(puntuaciones$CP1)) / max(abs(coordenadas_variables$CP1)),
+                             max(abs(puntuaciones$CP2)) / max(abs(coordenadas_variables$CP2)))
+coordenadas_variables$CP1_grafico <- coordenadas_variables$CP1 * factor_flechas
+coordenadas_variables$CP2_grafico <- coordenadas_variables$CP2 * factor_flechas
+# Única definición del Biplot: cambia solo la variable suplementaria de color y su paleta.
+dibujar_biplot <- function(variable_grupo, paleta, titulo, nombre_leyenda) {
+  # Grupos con al menos tres observaciones (condición mínima para una elipse).
+  conteo <- table(puntuaciones[[variable_grupo]])
+  datos_elipses <- puntuaciones[puntuaciones[[variable_grupo]] %in% names(conteo[conteo >= 3]), ]
+  # Centroides por grupo.
+  centroides <- puntuaciones |>
+    dplyr::group_by(Grupo = .data[[variable_grupo]]) |>
+    dplyr::summarise(CP1 = mean(CP1), CP2 = mean(CP2), .groups = "drop")
+  ggplot2::ggplot() +
+    # Ejes de referencia por el origen.
+    ggplot2::geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.4, colour = "grey60") +
+    ggplot2::geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.4, colour = "grey60") +
+    # Estudiantes: puntos pequeños y translúcidos (n = 1 000) coloreados por el grupo suplementario.
+    ggplot2::geom_point(data = puntuaciones,
+                        ggplot2::aes(x = CP1, y = CP2, colour = .data[[variable_grupo]]),
+                        size = 1.5, alpha = 0.35) +
+    # Elipses descriptivas (normal, 95 %) por grupo.
+    ggplot2::stat_ellipse(data = datos_elipses,
+                          ggplot2::aes(x = CP1, y = CP2, colour = .data[[variable_grupo]]),
+                          type = "norm", level = 0.95, linewidth = 1, linetype = "longdash") +
+    # Centroides: rombos grandes con borde negro.
+    ggplot2::geom_point(data = centroides, ggplot2::aes(x = CP1, y = CP2, fill = Grupo),
+                        shape = 23, size = 5, colour = "black", stroke = 0.9) +
+    # Etiquetas de los seis estudiantes más alejados del origen.
+    ggrepel::geom_text_repel(data = extremos, ggplot2::aes(x = CP1, y = CP2, label = paste0("Est. ", Estudiante)),
+                             size = 3, colour = "grey30", max.overlaps = Inf) +
+    # Flechas de las variables activas (escaladas con el factor visual común).
+    ggplot2::geom_segment(data = coordenadas_variables,
+                          ggplot2::aes(x = 0, y = 0, xend = CP1_grafico, yend = CP2_grafico),
+                          arrow = grid::arrow(length = grid::unit(0.22, "cm"), type = "closed"),
+                          linewidth = 0.9, colour = "black") +
+    # Nombres de las variables junto a las puntas, con halo blanco para leerse sobre los puntos.
+    ggrepel::geom_text_repel(data = coordenadas_variables,
+                             ggplot2::aes(x = CP1_grafico, y = CP2_grafico, label = Variable),
+                             fontface = "bold", size = 3.8, colour = "black",
+                             bg.color = "white", bg.r = 0.15, max.overlaps = Inf) +
+    ggplot2::scale_colour_manual(values = paleta, name = nombre_leyenda) +
+    ggplot2::scale_fill_manual(values = paleta, guide = "none") +
+    # Misma unidad visual en ambos ejes: indispensable para leer ángulos.
+    ggplot2::coord_equal(clip = "off") +
+    ggplot2::labs(
+      title = titulo,
+      subtitle = sprintf("CP1 + CP2 conservan el %.1f %% de la variabilidad de las 6 variables activas · n = %d estudiantes",
+                         porcentaje_plano, n_final),
+      x = sprintf("CP1 · %s (%.1f %%)", nombre_cp1, 100 * proporcion_varianza[1]),
+      y = sprintf("CP2 · %s (%.1f %%)", nombre_cp2, 100 * proporcion_varianza[2]),
+      caption = sprintf(paste0("Puntos: estudiantes (scores). Flechas: correlaciones variable–componente × factor visual común %.2f (solo escala, conserva ángulos).\n",
+                               "Elipses: normal al 95 %%, descriptivas. Rombos: centroides.
+",
+                               "El grupo de color no interviene en el ACP; deriva de variables activas, por lo que su separación es esperable por construcción."),
+                        factor_flechas)
+    ) +
+    tema_base + ggplot2::theme(legend.position = "bottom")
+}
+c(factor_flechas = round(factor_flechas, 3))
+```
+
+## Biplot A: nivel de estrés
+
+```{r biplot-estres, fig.height=8}
+biplot_estres <- dibujar_biplot("nivel_estres", paleta_estres,
+                                "¿Dónde se ubican los niveles de estrés en el plano dedicación–descanso?",
+                                "Nivel de estrés (terciles)")
+biplot_estres
+ggplot2::ggsave("figuras/13_biplot_nivel_estres.png", biplot_estres, width = 9, height = 8, dpi = 300)
+```
+
+## Biplot B: perfil estudio × sueño
+
+```{r biplot-perfil, fig.height=8}
+biplot_perfil <- dibujar_biplot("perfil_habitos", paleta_perfil,
+                                "¿Los perfiles de estudio y sueño ocupan regiones distintas del plano?",
+                                "Perfil estudio × sueño (medianas)")
+biplot_perfil
+ggplot2::ggsave("figuras/13_biplot_perfil_habitos.png", biplot_perfil, width = 9, height = 8, dpi = 300)
+```
+
+**Análisis del resultado.** Ambos Biplots son de **correlación**: los puntos son los scores y las flechas las correlaciones variable–componente multiplicadas por un único factor visual (`r fmt(factor_flechas)`), que conserva direcciones, ángulos y longitudes relativas pero impide leer literalmente la distancia entre la punta de una flecha y un punto. Cada figura responde una sola pregunta escrita en su título; los puntos individuales se atenúan (α = 0.35) y solo se etiquetan los seis más alejados del origen para que la señal (flechas, elipses y centroides) domine sobre el ruido. Los ejes llevan el nombre de la componente y su porcentaje; la leyenda solo codifica el grupo. La interpretación se hace por capas en la sección siguiente.
+
+# Interpretación del Biplot en capas
+
+## Capa 1: calidad del plano
+
+El plano conserva el **`r fmt(porcentaje_plano, 1)` %** de la varianza de las seis variables activas. Toda lectura posterior es una aproximación bidimensional; el `r fmt(100 - porcentaje_plano, 1)` % restante se reparte entre CP3 y siguientes.
+
+## Capa 2: calidad de representación de las variables (cos²)
+
+```{r cos2}
+# cos² = suma de las correlaciones al cuadrado con CP1 y CP2.
+calidad_variables <- rowSums(cor_var_pc[, 1:2]^2)
+tabla_cos2 <- data.frame(Variable = etiquetas_cortas[variables_activas],
+                         `cos² en el plano` = calidad_variables,
+                         `Longitud de la flecha` = sqrt(calidad_variables), check.names = FALSE, row.names = NULL) |>
+  dplyr::arrange(dplyr::desc(`cos² en el plano`))
+knitr::kable(tabla_cos2, digits = 3, caption = "Calidad de representación de cada variable en CP1–CP2.")
+```
+
+**Análisis del resultado.** Todas las variables tienen cos² ≥ `r fmt(min(calidad_variables))`: la mejor representada es `r tabla_cos2$Variable[1]` (`r fmt(tabla_cos2[1, 2], 3)`) y la peor `r tabla_cos2$Variable[nrow(tabla_cos2)]` (`r fmt(tabla_cos2[nrow(tabla_cos2), 2], 3)`). Ninguna flecha exige prudencia especial; aun así, la de sueño es la que más información cede a CP3.
+
+## Capa 3: ángulos entre flechas frente a la matriz de correlaciones
+
+```{r angulos}
+# Ángulo (en grados) entre dos flechas en el plano CP1–CP2.
+angulo_plano <- function(a, b) {
+  u <- cor_var_pc[a, 1:2]; v <- cor_var_pc[b, 1:2]
+  acos(sum(u * v) / (sqrt(sum(u^2)) * sqrt(sum(v^2)))) * 180 / pi
+}
+pares_clave <- list(c("study_hours_per_day", "attendance_percentage"), c("internal_marks", "cgpa"),
+                    c("stress_level_1_to_10", "sleep_hours"), c("sleep_hours", "cgpa"),
+                    c("study_hours_per_day", "cgpa"), c("stress_level_1_to_10", "cgpa"))
+tabla_angulos <- purrr::map_dfr(pares_clave, function(p) data.frame(
+  `Variable 1` = etiquetas_cortas[p[1]], `Variable 2` = etiquetas_cortas[p[2]],
+  `Ángulo en el plano (°)` = angulo_plano(p[1], p[2]),
+  `Pearson original` = r_pearson[p[1], p[2]],
+  `cos del ángulo` = cos(angulo_plano(p[1], p[2]) * pi / 180), check.names = FALSE, row.names = NULL))
+knitr::kable(tabla_angulos, digits = 2, caption = "Ángulos entre flechas y correlaciones originales.")
+```
+
+**Análisis del resultado.** El Biplot reproduce la matriz de correlaciones: estudio y asistencia forman un ángulo de `r fmt(tabla_angulos[1, 3], 1)`° (r = `r fmt(tabla_angulos[1, 4])`), notas internas y CGPA de `r fmt(tabla_angulos[2, 3], 1)`° (r = `r fmt(tabla_angulos[2, 4])`); estrés y sueño apuntan casi en direcciones opuestas (`r fmt(tabla_angulos[3, 3], 1)`°, r = `r fmt(tabla_angulos[3, 4])`), y estrés y CGPA quedan cerca de la perpendicular (`r fmt(tabla_angulos[6, 3], 1)`°, r = `r fmt(tabla_angulos[6, 4])`): en el plano retenido casi no comparten información lineal. Un ángulo no es una causa: describe covariación.
+
+## Capa 4: posición de las observaciones extremas
+
+```{r extremos}
+# Valores originales de los seis estudiantes más alejados del origen, para explicarlos desde las flechas.
+tabla_extremos <- extremos |>
+  dplyr::select(Estudiante, CP1, CP2, Distancia, perfil_habitos, nivel_estres) |>
+  dplyr::left_join(datos |> dplyr::mutate(Estudiante = seq_len(n_final)) |>
+                     dplyr::select(Estudiante, dplyr::all_of(variables_activas)), by = "Estudiante")
+names(tabla_extremos) <- c("Estudiante", "CP1", "CP2", "Distancia", "Perfil", "Estrés (nivel)",
+                           etiquetas_cortas[variables_activas])
+knitr::kable(tabla_extremos, digits = 2, caption = "Seis estudiantes más alejados del origen en CP1–CP2.")
+```
+
+**Análisis del resultado.** El estudiante más alejado (Est. `r extremos$Estudiante[1]`, CP1 = `r fmt(extremos$CP1[1])`, CP2 = `r fmt(extremos$CP2[1])`) se explica desde las flechas: su proyección sobre CGPA y estudio va en la dirección `r ifelse(extremos$CP1[1] > 0, "positiva (valores altos)", "negativa (valores bajos)")` y sobre estrés en la dirección `r ifelse(extremos$CP2[1] > 0, "positiva (estrés alto, sueño bajo)", "negativa (estrés bajo, sueño alto)")`. Son perfiles estandarizados **extremos, no atípicos**: combinan valores altos o bajos coherentes en varias variables a la vez, y un estudiante central en este plano podría ser extremo en CP3.
+
+## Capa 5: centroides por grupo (fin del alcance)
+
+```{r centroides}
+# Centroides de las cinco categóricas y separación máxima entre centroides dentro de cada variable.
+tabla_centroides <- purrr::map_dfr(categoricas_todas, function(v) {
+  puntuaciones |>
+    dplyr::group_by(Grupo = as.character(.data[[v]])) |>
+    dplyr::summarise(n = dplyr::n(), `Centroide CP1` = mean(CP1), `Centroide CP2` = mean(CP2), .groups = "drop") |>
+    dplyr::mutate(Variable = etiquetas[[v]]) |>
+    dplyr::select(Variable, dplyr::everything())
+})
+knitr::kable(tabla_centroides, digits = 2, caption = "Centroides de cada grupo en el plano CP1–CP2.")
+# Mayor distancia entre dos centroides de la misma variable.
+separacion_centroides <- tabla_centroides |>
+  dplyr::group_by(Variable) |>
+  dplyr::summarise(`Separación máxima entre centroides` = max(dist(cbind(`Centroide CP1`, `Centroide CP2`))), .groups = "drop") |>
+  dplyr::arrange(dplyr::desc(`Separación máxima entre centroides`))
+knitr::kable(separacion_centroides, digits = 2, caption = "Separación máxima entre centroides por variable de agrupación.")
+```
+
+**Análisis del resultado.** En el **Biplot A** los centroides de estrés se alinean con CP2: Bajo en CP2 = `r fmt(tabla_centroides[tabla_centroides$Grupo == "Bajo", "Centroide CP2"][[1]])` y Alto en `r fmt(tabla_centroides[tabla_centroides$Grupo == "Alto", "Centroide CP2"][[1]])`, con un leve desplazamiento en CP1 (`r fmt(tabla_centroides[tabla_centroides$Grupo == "Bajo", "Centroide CP1"][[1]])` frente a `r fmt(tabla_centroides[tabla_centroides$Grupo == "Alto", "Centroide CP1"][[1]])`): el grupo de estrés alto se ubica algo más hacia la dedicación porque estudia y asiste más, pero su CGPA mediano es menor (`r fmt(tabla_grupos[tabla_grupos$Grupo == "Alto", "CGPA mediana"][[1]])` frente a `r fmt(tabla_grupos[tabla_grupos$Grupo == "Bajo", "CGPA mediana"][[1]])`): en esta base el estrés se alinea con las horas de estudio, no con la nota. En el **Biplot B** los cuatro perfiles ocupan los cuatro cuadrantes: "Estudia+ Duerme+" en (`r fmt(tabla_centroides[tabla_centroides$Grupo == "Estudia+ Duerme+", "Centroide CP1"][[1]])`, `r fmt(tabla_centroides[tabla_centroides$Grupo == "Estudia+ Duerme+", "Centroide CP2"][[1]])`) y "Estudia- Duerme-" en (`r fmt(tabla_centroides[tabla_centroides$Grupo == "Estudia- Duerme-", "Centroide CP1"][[1]])`, `r fmt(tabla_centroides[tabla_centroides$Grupo == "Estudia- Duerme-", "Centroide CP2"][[1]])`), la mayor separación de todas (`r fmt(separacion_centroides[1, 2][[1]])` unidades). Las elipses, sin embargo, se solapan ampliamente: los centroides difieren, la separación individual es parcial. Las categóricas **a priori** tienen centroides a menos de `r fmt(max(abs(unlist(tabla_centroides[tabla_centroides$Variable %in% etiquetas[categoricas], c("Centroide CP1", "Centroide CP2")]))))` unidades del origen y elipses prácticamente coincidentes: la carrera, la residencia y la dieta no acompañan diferencias en este plano, lo mismo que mostraron las cajas de CGPA. La separación de los grupos derivados es **esperable por construcción** (se definieron con variables activas); el ACP no "encontró" grupos. **Aquí termina el alcance del análisis.**
+
+# Comunicación de resultados
+
+## Respuesta descriptiva a la pregunta
+
+En esta base de `r n_final` estudiantes el CGPA promedia `r fmt(mean(datos$cgpa))` (DE `r fmt(sd(datos$cgpa))`), con distribución simétrica y `r extremos_iqr(datos$cgpa)` valores extremos que no se eliminan. Las horas de sueño (r = `r fmt(r_pearson["sleep_hours", "cgpa"])`) y de estudio (r = `r fmt(r_pearson["study_hours_per_day", "cgpa"])`) se asocian positivamente con el CGPA, mientras que edad, pantalla y gimnasio no muestran asociación lineal con nada. El estrés sube con el estudio y baja con el sueño, y apenas se relaciona con el CGPA. Entre carreras, residencias y dietas la mediana del CGPA cambia menos de `r fmt(max(rango_medianas[rango_medianas$Variable %in% etiquetas[categoricas], 2][[1]]) + 0.005, 1)` puntos y las cajas se solapan; entre perfiles de hábitos va de `r fmt(tabla_grupos[tabla_grupos$Grupo == "Estudia- Duerme-", "CGPA mediana"][[1]])` a `r fmt(tabla_grupos[tabla_grupos$Grupo == "Estudia+ Duerme+", "CGPA mediana"][[1]])`. El ACP resume seis variables en dos ejes (`r fmt(porcentaje_plano, 1)` %): dedicación y desempeño, y tensión frente a descanso; en el Biplot los perfiles y los niveles de estrés ocupan regiones distintas con elipses solapadas. Todo lo anterior describe asociaciones en esta base, probablemente simulada: no demuestra causas ni se extiende a otros estudiantes.
+
+## Afirmaciones respaldadas y afirmaciones excesivas
+
+```{r afirmaciones}
+data.frame(
+  `Afirmación respaldada por los datos` = c(
+    sprintf("Los estudiantes que duermen más tienden a tener CGPA más alto (r = %.2f; flecha de sueño alineada con CGPA).", r_pearson["sleep_hours", "cgpa"]),
+    sprintf("CP1 resume dedicación y desempeño: CGPA, notas, estudio y asistencia cargan juntas (correlaciones ≥ %.2f).", min(abs(cor_var_pc[c("cgpa", "internal_marks", "study_hours_per_day", "attendance_percentage"), 1]))),
+    "Los centroides de carrera, residencia y dieta están cerca del origen: esas variables no acompañan diferencias en el plano."),
+  `Afirmación excesiva o incorrecta` = c(
+    "Dormir más causa mejores notas (la base es observacional y probablemente simulada).",
+    "El ACP descubrió tres grupos de estrés (los niveles se definieron a priori con una variable activa).",
+    "Un estudiante dentro de la elipse 'Estudia+ Duerme+' tiene CGPA alto en todas las variables (la elipse es un resumen, no una frontera)."),
+  check.names = FALSE
+) |> knitr::kable(caption = "Tres afirmaciones respaldadas frente a tres excesivas.")
+```
+
+## Decisiones metodológicas
+
+```{r decisiones}
+data.frame(
+  Decisión = c("Variable respuesta", "Categóricas derivadas", "Media/DE frente a mediana/IQR", "Moda", "Valores extremos",
+               "Variables activas del ACP", "Estandarización", "Número de componentes", "Signo de las componentes",
+               "Variable de color del Biplot", "Lenguaje"),
+  Criterio = c(
+    "CGPA: medida final de desempeño con estructura correlacional (r = 0.62 con sueño, 0.51 con estudio).",
+    "Terciles del estrés y perfil 2 × 2 por medianas; cortes descriptivos declarados.",
+    "Simetría en todas las variables (|asimetría| ≤ 0.44, media ≈ mediana): media/DE con mediana/IQR de respaldo.",
+    "Clase modal de Sturges en continuas; moda exacta solo en la edad (discreta).",
+    "Regla 1.5·IQR para contarlos; no se eliminan porque son promedios plausibles.",
+    "Seis variables con |r| ≥ 0.10 con alguna otra; edad, pantalla y gimnasio excluidas por no covariar (el plano bajaría de 86.6 % a ≈ 58 %).",
+    "scale. = TRUE porque horas, porcentajes y puntos tienen escalas incompatibles.",
+    "Dos: coinciden Kaiser, 80 % acumulado y codo del scree plot.",
+    "Orientadas hacia CGPA alto (CP1) y estrés alto (CP2); el signo es arbitrario y se declara.",
+    "Suplementaria (no activa); se advierte que deriva de variables activas y que la separación es esperable por construcción.",
+    "'Se asocia', 'acompaña', 'en esta base'; nunca 'causa' ni generalización poblacional."
+  )
+) |> knitr::kable(caption = "Decisiones metodológicas y su justificación.")
+```
+
+# Apéndice
+
+## Correspondencia con la rúbrica
+
+```{r rubrica}
+data.frame(
+  Criterio = c("Claridad y coherencia de la pregunta (1.0)", "Organización y presentación de los datos (1.0)",
+               "Aplicación de técnicas descriptivas (1.5)", "Interpretación y conclusiones (1.5)"),
+  `Dónde se evidencia` = c(
+    "Sección 1: pregunta con dos cuantitativas, una respuesta y dos categóricas; justificación en cuatro preguntas; objetivos con verbos descriptivos.",
+    "Secciones 3–5: tipos verificados, cero faltantes, muestra analítica única, advertencias sobre la base, tabla de variables con rol.",
+    "Secciones 7–13: frecuencias, media/mediana/moda/DE/varianza/IQR/rango, Sturges, asimetría y curtosis, boxplots, Pearson y Spearman, ACP con tres criterios de retención, Biplot con factor visual declarado; cada decisión justificada en la tabla de decisiones.",
+    "Bloques 'Análisis del resultado' con cifras calculadas en el documento; interpretación del Biplot en cinco capas hasta los centroides; respuesta descriptiva; afirmaciones respaldadas frente a excesivas; alcance delimitado."
+  ), check.names = FALSE
+) |> knitr::kable(caption = "Correspondencia con los criterios de la rúbrica.")
+```
+
+## Información de la sesión
+
+```{r sesion}
+sessionInfo()
+```

@@ -1,0 +1,1368 @@
+---
+title: "Práctica 4 | De LS, LAD y Huber a los embeddings y las redes neuronales"
+subtitle: "Similitud semántica entre oraciones con datos reales de STS Benchmark"
+author: "Curso: Métodos alternativos de regresión lineal"
+date: "Noviembre de 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    highlight: tango
+    df_print: paged
+    self_contained: true
+    keep_md: true
+params:
+  iteraciones_glove: 25
+  bootstrap: 120
+  contaminar: 0.10
+  correr_red: false
+  correr_sbert: false
+---
+
+<style id="s4-estilo-standalone">
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+html { scroll-behavior:smooth; }
+body { font-family:'DM Sans', 'DejaVu Sans', sans-serif; color:#1d2b42;
+       background:linear-gradient(145deg,#f3f9ff 0%,#fff 45%,#f8f3ff 100%);
+       font-size:16px; line-height:1.7; }
+h1,h2,h3,h4 { font-family:'Space Grotesk','DM Sans',sans-serif;
+               letter-spacing:-.02em; color:#132a4c; }
+h2 { margin-top:2.35em; padding-bottom:10px; border-bottom:2px solid #d4eaff; }
+h3 { margin-top:1.6em; color:#1670b9; }
+em { color:#33475f; }
+.main-container { max-width:1220px !important; }
+.hero {
+  color:#fff; padding:42px 50px 48px;
+  background:radial-gradient(circle at 92% 18%, #ffbc69 0%, transparent 27%),
+             radial-gradient(circle at 78% 85%, #f55c95 0%, transparent 25%),
+             linear-gradient(118deg,#0f3157 4%,#0875a2 57%,#12bda5 110%);
+  border-radius:22px; box-shadow:0 18px 45px rgba(19,65,94,.24);
+  position:relative; overflow:hidden; margin-bottom:35px;
+}
+.hero::before { content:""; position:absolute; width:260px; height:260px;
+  border:3px solid rgba(255,255,255,.19); border-radius:50%; right:25px; top:-93px; }
+.hero::after { content:""; position:absolute; width:190px; height:190px;
+  border:2px dashed rgba(255,255,255,.22); border-radius:50%; right:73px; bottom:-110px; }
+.hero h1 { color:white !important; font-size:40px; line-height:1.12;
+           max-width:810px; margin:12px 0 18px; }
+.hero p { font-size:19px; color:#e5faff; max-width:820px; margin:0 0 18px; }
+.hero .eyebrow { font-size:12px; font-weight:800; letter-spacing:.16em;
+                 color:#e5ffd1; text-transform:uppercase; }
+.pillrow span { display:inline-block; border:1px solid rgba(255,255,255,.36);
+  padding:3px 12px; margin:6px 7px 0 0; border-radius:24px;
+  font-size:12px; font-weight:700; background:rgba(255,255,255,.12); }
+.s4-ruta {
+  display:flex; align-items:stretch; flex-wrap:wrap; gap:13px;
+  margin:24px 0 30px; padding:18px; border-radius:16px;
+  background:linear-gradient(120deg,#e5f4ff,#f0fcf8 65%,#fff4e9);
+  border:1px solid #c7e2f1;
+  box-shadow:0 6px 26px rgba(30,96,130,.08);
+}
+.s4-ruta > div:not(.s4-ruta-flecha) {
+  flex:1 1 160px; min-width:145px; border-radius:12px;
+  background:#fff; border:1px solid #d5eafa;
+  padding:16px 18px; box-shadow:0 4px 13px rgba(20,75,110,.06);
+}
+.s4-ruta span { display:block; text-transform:uppercase; letter-spacing:.11em;
+  font-weight:800; font-size:11px; color:#1682a6; }
+.s4-ruta strong { display:block; font-family:'Space Grotesk','DM Sans',sans-serif;
+  color:#15375d; font-size:17px; margin:6px 0; }
+.s4-ruta small { color:#4a657c; font-size:12px; line-height:1.6; }
+.s4-ruta-flecha { display:flex; align-items:center; justify-content:center;
+  font-size:26px; color:#18aa9f; font-weight:800; }
+blockquote { background:#fff9eb; border-left:6px solid #ffab4f; margin:24px 0;
+             padding:13px 22px; border-radius:6px; color:#243650;
+             box-shadow:0 3px 14px rgba(100,70,10,.05); }
+blockquote p { margin:7px 0; }
+pre { background:#12213a !important; color:#e5f0ff !important;
+      padding:22px !important; border-radius:10px; border:0;
+      box-shadow:0 8px 20px rgba(13,31,63,.1); overflow-x:auto; }
+pre code { background:transparent !important; color:#ecf3ff !important;
+           font-size:13px; line-height:1.55; }
+pre:not(.r):not(.sourceCode) { background:#f4f9ff !important;
+                              color:#253957 !important; border:1px solid #d4e7f9; }
+/* Corrección de contraste: knitr imprime las SALIDAS como <pre><code>.
+   La regla general 'pre code' les daba letras casi blancas sobre fondo claro.
+   Se distingue explícitamente la consola de salida del código fuente R. */
+/* START S4-SALIDAS-LEGIBLES */
+pre:not(.r):not(.sourceCode) {
+  background:#f1f7ff !important;
+  color:#20334d !important;
+  border:1px solid #c8dff4 !important;
+  border-left:5px solid #11aa98 !important;
+  box-shadow:0 5px 15px rgba(25,74,115,.07);
+}
+pre:not(.r):not(.sourceCode) code,
+pre:not(.r):not(.sourceCode) code span {
+  background:transparent !important;
+  color:#20334d !important;
+  font-family:'DejaVu Sans Mono', 'Consolas', monospace;
+  font-size:13px;
+  font-weight:500;
+  line-height:1.65;
+  text-shadow:none !important;
+}
+pre:not(.r):not(.sourceCode) code { display:block; padding:0; }
+/* END S4-SALIDAS-LEGIBLES */
+code { background:#e9f3ff; padding:2px 5px; border-radius:4px;
+       color:#145b95; }
+table { width:100%; font-size:14px; background:white; border-radius:7px;
+        overflow:hidden; box-shadow:0 3px 16px rgba(20,65,100,.06); }
+thead { background:#0c75a8; color:#fff; }
+thead tr th { color:#fff; border-color:#0c75a8 !important; }
+tbody tr:nth-child(even) { background:#f1f8ff; }
+td,th { padding:10px 12px !important; }
+.figure { background:white; padding:13px; border-radius:12px; 
+          box-shadow:0 6px 26px rgba(18,54,89,.06); }
+p.caption { font-size:13px; color:#67798b; }
+.tocify { background:white; border-radius:14px; 
+          box-shadow:0 6px 20px rgba(20,80,110,.08); }
+.tocify .active { background:#0b9cbc !important; border-color:#0b9cbc !important; }
+div.alert { border-radius:12px; }
+@media(max-width:900px) {
+ .hero {padding:30px 24px;}
+ .hero h1 {font-size:32px;}
+ .hero p {font-size:16px;}
+  .s4-ruta-flecha {display:none;}
+  .s4-ruta > div:not(.s4-ruta-flecha) {flex:1 1 100%;}
+ pre code {font-size:12px;}
+}
+</style>
+
+<div class="hero">
+<span class="eyebrow">APRENDIZAJE SUPERVISADO · NLP · R</span>
+<h1>¿Qué tan parecidas son dos frases?</h1>
+<p>Un problema real de procesamiento de lenguaje natural resuelto mediante las mismas pérdidas que estudiamos en regresión clásica.</p>
+<p class="pillrow"><span>Datos oficiales</span><span>Embeddings GloVe</span><span>LS · LAD · Huber</span><span>Red neuronal opcional</span></p>
+</div>
+
+> **Pregunta científica.** Si entrenamos un modelo con pares de frases cuya similitud fue evaluada por personas, ¿qué cambia cuando minimizamos cuadrados, valores absolutos o la pérdida de Huber? ¿Por qué la misma decisión aparece durante el entrenamiento de redes neuronales?
+
+**Resultados de aprendizaje**
+
+1. Construir *embeddings* de palabras y representar cada oración con un vector numérico.
+2. Estimar modelos supervisados de similitud semántica usando LS, LAD y M de Huber.
+3. Interpretar de forma rigurosa las salidas de R y las predicciones en unidades del problema.
+4. Comparar el rendimiento en conjuntos de entrenamiento, validación y prueba separados.
+5. Comprender cómo MSE, MAE y Huber reaparecen como funciones de pérdida al entrenar redes neuronales.
+6. Distinguir resultados estadísticos de propiedades del sistema de NLP: asociación, no causalidad ni «comprensión» humana del lenguaje.
+
+## 0. Orientación: el hilo conductor
+
+\[
+\text{Oraciones}\;\longrightarrow\;\text{embeddings}\;\longrightarrow\;
+\mathbf{x}_i\;\longrightarrow\;\hat y_i=f_\theta(\mathbf{x}_i)
+\;\longrightarrow\;\mathcal L(y_i,\hat y_i).
+\]
+
+Cada observación \(i\) contiene dos oraciones, un conjunto de características numéricas \(\mathbf x_i\), y una similitud humana \(y_i\in[0,1]\). **La pregunta que liga la estadística clásica con la IA es qué pérdida \(\mathcal L\) guía el ajuste.**
+
+| Método | Objetivo por observación | Parámetro funcional típico | Una advertencia |
+|:--|:--|:--|:--|
+| LS | \(e^2\) | Media condicional si el modelo está bien especificado | Sensible a grandes errores de respuesta |
+| LAD | \(|e|\) | Mediana condicional | No corrige puntos de alto apalancamiento por sí solo |
+| M de Huber | \(\rho_\delta(e)\) | Centro robusto dependiente de \(\delta\) | Exige fijar escala y umbral |
+| Red neuronal | Las mismas pérdidas, más una función \(f_\theta\) no lineal | Depende de arquitectura y pérdida | Más parámetros no implican mejor generalización |
+
+La pérdida de Huber en la escala de puntuación es:
+
+\[
+\rho_\delta(e)=
+\begin{cases}
+\tfrac12 e^2,& |e|\leq\delta,\\
+\delta\bigl(|e|-\tfrac12\delta\bigr),& |e|>\delta.
+\end{cases}
+\]
+
+En `MASS::rlm`, el umbral opera sobre residuos estandarizados por una **escala robusta estimada**; en `keras3::loss_huber` se expresa directamente en unidades de la respuesta. No conviene identificar numéricamente ambos parámetros.
+
+### Guía de supervivencia de R: cómo leer los símbolos del laboratorio
+
+**No es necesario dominar programación avanzada para seguir la práctica.** La
+mayoría de las instrucciones se construyen a partir de unas pocas piezas. Esta
+tabla puede consultarse cada vez que aparezca una expresión desconocida:
+
+| Expresión en R | Lectura en palabras sencillas | Ejemplo del laboratorio |
+|:--|:--|:--|
+| `a <- b` | Guardar el resultado `b` con el nombre `a`. | `ent <- caracterizar_pares(ent)` reemplaza la tabla de entrenamiento por su versión enriquecida. |
+| `c(a,b)` | Reunir valores en un vector. | `c("cos_glove", "jaccard")` reúne dos nombres. |
+| `tabla$columna` | Tomar una columna de una tabla. | `ent$score` extrae las puntuaciones humanas. |
+| `tabla[filas, columnas]` | Seleccionar filas y columnas; la coma separa ambas posiciones. | `sts[sts$split == "train", ]` conserva las filas de entrenamiento. |
+| `tabla[[nombre]]` | Extraer una columna usando un nombre guardado en otra variable. | `base[[nm]]` accede a la columna cuyo nombre está en `nm`. |
+| `paquete::funcion()` | Ejecutar una función que pertenece a un paquete concreto. | `MASS::rlm()` ajusta el modelo robusto. |
+| `function(x) ...` | Definir una receta que recibe el argumento `x` y devuelve un resultado. | `function(x) length(tokenizar(x))` cuenta palabras. |
+| `if (condicion) ...` | Ejecutar instrucciones solo cuando la condición se cumple. | Descargar los datos solo si falta el archivo. |
+| `vapply`, `mapply`, `lapply` | Repetir una función sobre varios elementos; difieren en la forma de las entradas y de la salida. | Calcular medidas para miles de oraciones. |
+| `print()`, `cat()`, `summary()` | Mostrar una tabla u objeto, escribir un mensaje o solicitar un resumen. | `summary(modelo_ls)` presenta los coeficientes LS. |
+| `# comentario` | Explicación para lectores: R **no ejecuta** el texto que sigue a `#`. | `# PASO 2. Leer TSV comprimido.` |
+
+**Una diferencia esencial:** `=` dentro de `lm(..., data=ent)` asigna un
+**argumento de una función**, mientras que `<-` guarda un resultado para
+utilizarlo más adelante. El símbolo `==` significa **comparar si dos valores
+son iguales**, por ejemplo al seleccionar las filas de entrenamiento.
+
+Cuando encuentre paréntesis anidados, léalos **desde el interior hacia
+afuera**: `round(mean(x), 3)` primero calcula `mean(x)` y después redondea el
+resultado a tres decimales.
+
+### Tres verificaciones sencillas antes de empezar
+
+Puede ejecutar estas líneas en la **consola de RStudio** para familiarizarse
+con los objetos. El bloque es de práctica y no se ejecuta al pulsar Knit:
+
+```{r practicar-sintaxis-r, eval=FALSE}
+# 1. Crear un vector con tres similitudes humanas de ejemplo.
+ejemplo <- c(0.2, 0.7, 0.9)
+
+# 2. Calcular su media y mostrarla redondeada a tres decimales.
+print(round(mean(ejemplo), 3))
+
+# 3. Guardar los valores en una pequeña tabla con dos columnas.
+tabla_ejemplo <- data.frame(id=c(1,2,3), score=ejemplo)
+
+# 4. Ver únicamente las dos primeras filas y la columna score.
+print(tabla_ejemplo[1:2, "score", drop=FALSE])
+```
+
+**¿Qué debería observar?** La media es 0.6; el segundo resultado muestra 0.2
+y 0.7 en una columna llamada `score`. Son valores **inventados únicamente
+para practicar sintaxis** y no se incorporan a los análisis de STS.
+
+## 1. Preparación de RStudio
+
+Ejecute una vez en la consola de R lo siguiente (no durante cada compilación):
+
+```{r instalar-paquetes, eval=FALSE}
+# PASO 1. Instalar bibliotecas desde CRAN (ejecutar UNA sola vez).
+install.packages(c(
+  "readr", "dplyr", "ggplot2", "text2vec", "Matrix", "quantreg",
+  "MASS", "knitr", "rmarkdown", "svglite", "readxl", "scales",
+  "shiny", "bslib"
+))
+# PASO 2. Para el módulo opcional de red neuronal: véase sección 9.
+# install.packages(c("keras3", "reticulate"))
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE,
+                      fig.width=10.2, fig.height=5.5,
+                      fig.align="center", dev="svg")
+obligatorios <- c("readr", "dplyr", "ggplot2", "text2vec",
+                  "quantreg", "MASS", "knitr", "svglite")
+faltan <- obligatorios[!vapply(obligatorios, requireNamespace, logical(1), quietly=TRUE)]
+if (length(faltan)) {
+  stop("Faltan bibliotecas: ", paste(faltan, collapse=", "),
+       ". Ejecute el bloque de instalación de la sección 1.")
+}
+dir.create("datos", showWarnings=FALSE)
+dir.create("figuras", showWarnings=FALSE)
+set.seed(20261116)
+color_ls <- "#2685E8"
+color_lad <- "#EA4C91"
+color_huber <- "#11B99A"
+tema <- function() {
+  ggplot2::theme_minimal(base_size=14) +
+    ggplot2::theme(
+      plot.title=ggplot2::element_text(face="bold", size=18, colour="#12243B"),
+      plot.subtitle=ggplot2::element_text(colour="#56667C"),
+      panel.grid.minor=ggplot2::element_blank(),
+      legend.position="bottom",
+      axis.text=ggplot2::element_text(colour="#344357")
+    )
+}
+```
+
+**Interpretación de la preparación:** `set.seed` fija el muestreo pseudoaleatorio y facilita la reproducción. Esto no garantiza que el entrenamiento de una red neuronal sea bit a bit idéntico en todos los equipos.
+
+**Cómo leer este bloque de configuración:**
+
+- `install.packages()` descarga programas auxiliares de R una sola vez; `requireNamespace()` comprueba que ya estén disponibles sin cargarlos en el espacio de trabajo.
+- `knitr::opts_chunk$set(...)` define cómo aparecen el código y los gráficos en el documento: `echo=TRUE` muestra las instrucciones, `fig.width` y `fig.height` regulan las dimensiones y `dev="svg"` produce gráficos vectoriales.
+- `include=FALSE` en el encabezado del bloque `setup` indica que R **sí ejecuta** esas líneas, pero no las imprime en el informe. En contraste, `eval=FALSE` en el bloque de instalación significa que **no se ejecuta** durante Knit.
+- `dir.create()` prepara carpetas locales; `set.seed()` hace reproducibles los sorteos de la práctica; `tema <- function() ...` guarda una función para dar un estilo común a las gráficas.
+- `faltan <- ...` genera una lista de paquetes no instalados. Si falta alguno, `stop()` detiene el documento mostrando la acción que debe realizarse. El objetivo es evitar un error confuso a mitad del laboratorio.
+
+## 2. Datos reales: STS Benchmark
+
+**Origen oficial.** El conjunto STS Benchmark reúne pares de oraciones en inglés con evaluaciones humanas de similitud. En su versión original, las puntuaciones van de 0 a 5. Aquí las expresaremos en \([0,1]\) para comparar pérdidas con una red neuronal. El archivo proviene de la distribución oficial de Sentence-Transformers, basada en SemEval STS.
+
+- Datos: https://sbert.net/datasets/stsbenchmark.tsv.gz
+- Descripción: https://sbert.net/examples/sentence_transformer/training/sts/README.html
+- Copia estructurada con `score` entre 0 y 1: https://huggingface.co/datasets/sentence-transformers/stsb
+
+### Antes de ejecutar: leer los datos como una tabla
+
+Imagine la base como una hoja de cálculo: **cada fila es un par de oraciones**,
+las columnas `sentence1` y `sentence2` contienen los textos, `score` es la
+respuesta humana y `split` indica si la observación pertenece a entrenamiento,
+validación o prueba. Por ejemplo, `ent$score` significa «la columna `score`
+de la tabla de entrenamiento». No es una fórmula matemática ni una operación
+entre dos objetos.
+
+En el bloque siguiente hay cuatro operaciones distintas:
+
+1. **Localizar o descargar** un archivo (`file.path`, `file.exists`, `download.file`). `!` significa «no»: `!file.exists(destino)` es verdadero cuando el archivo todavía no existe.
+2. **Leer** su contenido (`readr::read_tsv`) como una tabla. `col_character()` evita que R interprete prematuramente textos o códigos como números; luego convertimos únicamente `score` mediante `as.numeric()`.
+3. **Comprobar** la estructura (`names`, `%in%`, `stopifnot`) y llevar `score` a la escala de 0 a 1. Si la escala original llega a 5, dividir por 5 cambia **la unidad**, no el orden de los pares.
+4. **Separar** las tres particiones oficiales. `sts$split == "train"` produce una secuencia de verdaderos y falsos que R utiliza para seleccionar filas; la coma final significa que conservamos todas las columnas.
+
+Las funciones `nrow()`, `head()` y `summary()` no modifican los datos: sirven
+para inspeccionar cuántas observaciones hay, mostrar las primeras filas y
+describir la distribución. **No pase al siguiente bloque si la estructura
+de la tabla no coincide con la esperada.**
+
+```{r descargar-sts}
+# PASO 1. Descargar el archivo oficial una sola vez; no usamos ejemplos inventados.
+destino <- file.path("datos", "stsbenchmark.tsv.gz")
+if (!file.exists(destino)) {
+  download.file(
+    url="https://sbert.net/datasets/stsbenchmark.tsv.gz",
+    destfile=destino, mode="wb", quiet=TRUE
+  )
+}
+
+# PASO 2. Leer TSV comprimido. Las oraciones se conservan como texto UTF-8.
+sts <- readr::read_tsv(
+  destino,
+  col_types=readr::cols(.default=readr::col_character()),
+  show_col_types=FALSE, progress=FALSE
+)
+
+# PASO 3. Validar el esquema y convertir la puntuación a numérica.
+necesarias <- c("split", "sentence1", "sentence2", "score")
+stopifnot(all(necesarias %in% names(sts)))
+sts$score <- as.numeric(sts$score)
+stopifnot(all(is.finite(sts$score)))
+if (max(sts$score) > 1.01) sts$score <- sts$score / 5
+stopifnot(all(sts$score >= 0 & sts$score <= 1))
+sts$split <- tolower(sts$split)
+sts$split[sts$split == "dev"] <- "validation"
+
+# PASO 4. Respetar las particiones oficiales, sin repartir filas al azar.
+ent <- as.data.frame(sts[sts$split == "train", ])
+val <- as.data.frame(sts[sts$split == "validation", ])
+pru <- as.data.frame(sts[sts$split == "test", ])
+stopifnot(nrow(ent)>100, nrow(val)>100, nrow(pru)>100)
+
+# PASO 5. Inspección de la base.
+print(data.frame(Particion=c("Entrenamiento","Validación","Prueba"),
+                 Pares=c(nrow(ent),nrow(val),nrow(pru))))
+print(head(ent[c("sentence1","sentence2","score")], 3))
+print(summary(ent$score))
+```
+
+### Cómo interpretar las tres salidas anteriores
+
+- **Tabla de particiones.** El número de filas es el de pares de oraciones, no el de palabras. Entrenamiento sirve para estimar parámetros; validación permite elegir modelos; prueba queda reservada para la comparación final.
+- **`head`.** Cada fila tiene dos textos en lenguaje natural y una *respuesta supervisada*: una similitud humana normalizada. El algoritmo no ve «la respuesta correcta» para los textos nuevos del conjunto de prueba.
+- **`summary(ent$score)`.** `Min.` y `Max.` delimitan la escala; `Median` describe una similitud típica, mientras `Mean` promedia puntuaciones. Una distribución asimétrica sugiere que MAE y RMSE podrían destacar comportamientos distintos.
+
+**Lectura del resultado real:** el archivo contiene **`r nrow(ent)` pares para entrenar**, **`r nrow(val)` para validar** y **`r nrow(pru)` para evaluar**. La mediana de la puntuación de entrenamiento es **`r round(median(ent$score),3)`**. Estos números se insertan automáticamente al compilar el documento con R, no son cifras supuestas.
+
+**Lectura del gráfico que se genera a continuación:** `ggplot(ent, aes(x=score))`
+indica que la tabla se llama `ent` y que el eje horizontal utiliza la columna
+`score`; `geom_histogram()` cuenta cuántos pares caen en cada intervalo;
+`geom_vline(xintercept=...)` añade la línea vertical de la mediana, y
+`labs()` escribe los títulos de los ejes. Los colores no intervienen en
+ninguna estimación: solo ayudan a identificar elementos de la figura.
+
+```{r grafica-distribucion, fig.cap="Distribución real de puntuaciones humanas de similitud. Fuente: STS Benchmark."}
+ggplot2::ggplot(ent, ggplot2::aes(x=score)) +
+  ggplot2::geom_histogram(bins=28, fill=color_ls, colour="white", linewidth=0.45) +
+  ggplot2::geom_vline(xintercept=median(ent$score),
+                      linetype="dashed", colour=color_lad, linewidth=1.1) +
+  ggplot2::labs(title="Similitudes etiquetadas por personas",
+    subtitle="Línea rosada: mediana de entrenamiento",
+    x="Similitud humana normalizada", y="Número de pares") + tema()
+```
+
+## 3. De las palabras a los embeddings con GloVe
+
+Una regresión necesita números, pero el problema original contiene oraciones. **GloVe** construye vectores de palabras usando coocurrencias en un corpus. Su función objetivo original es una **suma ponderada de cuadrados**:
+
+\[
+J=\sum_{i,j} f(X_{ij})
+\bigl(w_i^\top \tilde w_j+b_i+\tilde b_j-\log X_{ij}\bigr)^2.
+\]
+
+Aquí \(X_{ij}\) cuenta coocurrencias; \(w_i\) y \(\tilde w_j\) son vectores de dimensión elegida. La función es *no convexa en todos los parámetros conjuntamente* debido al producto entre vectores; no equivale a resolver una regresión OLS ordinaria. Sin embargo, **la pérdida cuadrática vuelve a aparecer al aprender una representación lingüística**.
+
+Referencia primaria: Pennington, Socher y Manning (2014), [GloVe](https://aclanthology.org/D14-1162/); implementación R: [text2vec](https://text2vec.org/glove.html).
+
+### Traducir el algoritmo GloVe a pasos cotidianos
+
+Este es uno de los bloques más técnicos de la práctica, por lo que conviene
+distinguir **qué entra y qué sale** de cada función:
+
+| Instrucción de R | Operación conceptual | Objeto que obtenemos |
+|:--|:--|:--|
+| `tolower(c(...))` | Unir las oraciones de entrenamiento y convertirlas a minúsculas. | Una colección de textos con escritura uniforme. |
+| `itoken(..., tokenizer=...)` | Separar cada oración en palabras o *tokens*. | Un iterador que recorre palabras sin construir una tabla gigante de texto. |
+| `create_vocabulary()` | Contar qué palabras aparecen. | Un vocabulario con frecuencias. |
+| `prune_vocabulary(..., term_count_min=2)` | Excluir palabras que aparecen solo una vez en entrenamiento. | Un vocabulario más pequeño y manejable. |
+| `create_tcm(..., skip_grams_window=5L)` | Contar qué palabras suelen aparecer cerca unas de otras. | Una matriz de coocurrencias de palabras. |
+| `GlobalVectors$new(rank=40L)` | Configurar el algoritmo con 40 números por palabra. | El objeto que sabe cómo entrenar GloVe. |
+| `fit_transform(..., n_iter=...)` | Ajustar los vectores minimizando la función de GloVe. | Una matriz de vectores aprendidos. |
+
+Los símbolos `$new` y `$fit_transform` se leen aquí como **métodos de un
+objeto**: el primero crea el entrenador y el segundo le pide entrenar.
+El valor `40L` es el entero 40. **No significa que ajustaremos después
+40 coeficientes de regresión**: la regresión final solo utiliza tres
+características resumidas de cada par de oraciones.
+
+> **Conexión matemática.** GloVe aprende vectores usando una pérdida de tipo
+> cuadrático ponderado; después emplearemos la similitud entre esos vectores
+> como una variable explicativa en un problema supervisado completamente
+> distinto. Aprender una representación y predecir una etiqueta son dos
+> etapas separadas.
+
+```{r entrenar-glove}
+# PASO 1. Usar SOLO las oraciones de entrenamiento para aprender el vocabulario.
+# Así evitamos incorporar el texto de validación/prueba al ajuste del embedding.
+# Mantener el mismo tratamiento de mayúsculas en el aprendizaje y la
+# posterior búsqueda de palabras; de otro modo habrá falsos desconocidos.
+corpus_ent <- tolower(c(ent$sentence1, ent$sentence2))
+
+# PASO 2. Tokenizar y conservar palabras que aparezcan al menos dos veces.
+iter1 <- text2vec::itoken(corpus_ent, tokenizer=text2vec::word_tokenizer,
+                         progressbar=FALSE)
+vocab <- text2vec::create_vocabulary(iter1)
+vocab <- text2vec::prune_vocabulary(vocab, term_count_min=2)
+vectorizador <- text2vec::vocab_vectorizer(vocab)
+
+# PASO 3. Crear la matriz dispersa de coocurrencias; ventana de cinco palabras.
+iter2 <- text2vec::itoken(corpus_ent, tokenizer=text2vec::word_tokenizer,
+                         progressbar=FALSE)
+mat_cooc <- text2vec::create_tcm(iter2, vectorizador, skip_grams_window=5L)
+
+# PASO 4. Ajustar GloVe a esa matriz: 40 dimensiones de representación.
+glove <- text2vec::GlobalVectors$new(rank=40L, x_max=10)
+vect_principal <- glove$fit_transform(
+  mat_cooc, n_iter=as.integer(params$iteraciones_glove),
+  convergence_tol=0.01
+)
+vect_palabras <- vect_principal + t(glove$components)
+
+# PASO 5. Verificar dimensiones de los objetos.
+print(data.frame(
+  Objeto=c("Vocabulario", "Matriz de coocurrencias", "Embeddings de palabras"),
+  Filas=c(nrow(vocab), nrow(mat_cooc), nrow(vect_palabras)),
+  Columnas=c(NA, ncol(mat_cooc), ncol(vect_palabras))
+))
+```
+
+**Interpretación:** la última tabla muestra el salto de lenguaje a álgebra lineal. Cada palabra reconocida posee un vector de **`r ncol(vect_palabras)` componentes**. Ninguna componente individual tiene por qué corresponder a un concepto humano («felicidad», «negación»); lo útil son relaciones geométricas entre vectores. Este GloVe pequeño es un **experimento pedagógico entrenado sobre STS**, no un modelo lingüístico de producción.
+
+**Cómo leer las dimensiones:** `nrow()` indica cantidad de filas y `ncol()`
+cantidad de columnas. En la matriz de embeddings, una fila corresponde a una
+palabra y las 40 columnas son sus coordenadas aprendidas. La expresión
+`t(glove$components)` transpone una matriz (intercambia filas y columnas)
+antes de sumarla a otra matriz de la misma forma. El resultado
+`vect_palabras` será el **diccionario numérico** que usaremos al analizar
+oraciones nuevas.
+
+### De un vector por palabra a un vector por oración
+
+GloVe entrega números para **palabras**. Sin embargo, cada fila de STS compara
+**dos oraciones completas**. Para obtener un único vector por oración tomamos
+el promedio de los vectores de las palabras conocidas:
+
+\[
+\mathbf v_A=\frac{1}{|P_A|}\sum_{w\in P_A}\mathbf v_w,
+\]
+
+donde \(P_A\) representa la secuencia de palabras de la oración \(A\) que
+están presentes en el vocabulario; las repeticiones de palabras cuentan en
+este promedio. Si ninguna palabra está disponible, el código devuelve un
+vector de ceros y la función coseno asigna cero por convenio computacional.
+Este caso expresa **falta de información del embedding**, no «similitud
+semántica exactamente nula» demostrada.
+
+Después calculamos tres características del par \((A_i,B_i)\):
+
+\[
+C_i=\frac{\mathbf v_{A_i}\cdot\mathbf v_{B_i}}
+{\|\mathbf v_{A_i}\|\,\|\mathbf v_{B_i}\|},\qquad
+J_i=\frac{|W_{A_i}\cap W_{B_i}|}{|W_{A_i}\cup W_{B_i}|},
+\]
+\[
+D_i=\left|\log(1+n_{A_i})-\log(1+n_{B_i})\right|.
+\]
+
+Aquí \(W_A\) y \(W_B\) son conjuntos de palabras **distintas** (para
+Jaccard), mientras \(n_A,n_B\) cuentan todas las palabras, incluidas las
+repetidas (para la longitud). **Ejemplo didáctico de Jaccard:** «gato juega
+hoy» y «gato duerme hoy» comparten 2 palabras distintas y tienen 4 en su
+unión, por lo que \(J=2/4=0.5\). Este ejemplo no procede de STS.
+
+**Cómo interpretar las funciones de R del bloque siguiente:**
+
+- `strsplit()` corta un texto donde encuentra separadores; `unlist()` convierte su resultado en un vector; `nzchar()` elimina cadenas vacías. `unique()` conserva una sola copia de cada palabra para Jaccard.
+- `%in%` comprueba cuáles palabras están en el vocabulario. `colMeans()` calcula un promedio por **columna** de la matriz de embeddings; `rowSums()` suma por **fila** para calcular muchos cosenos simultáneamente.
+- `vapply()` repite una función con un tipo y tamaño de salida predefinidos (`FUN.VALUE`). `t()` transpone su resultado para dejar una oración por fila. `mapply()` aplica la función de Jaccard a los dos textos correspondientes de cada par.
+- `drop=FALSE` evita que una selección de una única fila deje de ser una matriz; `ifelse()` elige entre dos valores según una condición y `log1p(n)` calcula exactamente \(\log(1+n)\).
+- `caracterizar_pares(base)` recibe **una tabla**, agrega las tres columnas de características y devuelve la tabla ampliada. Se aplica con el mismo vocabulario GloVe a entrenamiento, validación y prueba.
+
+```{r funciones-embeddings}
+# PASO 6. Función transparente que convierte una oración en un vector.
+tokenizar <- function(frase) {
+  z <- unlist(strsplit(tolower(frase), "[^[:alpha:]']+"))
+  z[nzchar(z)]
+}
+
+embedding_oracion <- function(frase, tabla=vect_palabras) {
+  palabras <- tokenizar(frase)
+  presentes <- palabras[palabras %in% rownames(tabla)]
+  # No inventar un vector para palabras desconocidas: usar un vector cero.
+  if (length(presentes)==0L) return(rep(0, ncol(tabla)))
+  colMeans(tabla[presentes, , drop=FALSE])
+}
+
+# PASO 7. Similaridad coseno, superposición léxica y diferencia de longitud.
+coseno_filas <- function(A, B) {
+  denominador <- sqrt(rowSums(A*A)) * sqrt(rowSums(B*B))
+  ifelse(denominador > 0, rowSums(A*B)/denominador, 0)
+}
+jaccard_textos <- function(a,b) {
+  x <- unique(tokenizar(a)); y <- unique(tokenizar(b))
+  if (length(union(x,y))==0L) return(0)
+  length(intersect(x,y))/length(union(x,y))
+}
+
+caracterizar_pares <- function(base) {
+  # PASO 8. Cada fila conserva su par original y su etiqueta humana.
+  n <- nrow(base)
+  A <- t(vapply(base$sentence1, embedding_oracion,
+                FUN.VALUE=numeric(ncol(vect_palabras))))
+  B <- t(vapply(base$sentence2, embedding_oracion,
+                FUN.VALUE=numeric(ncol(vect_palabras))))
+  base$cos_glove <- coseno_filas(A,B)
+  base$jaccard <- mapply(jaccard_textos, base$sentence1, base$sentence2)
+  n_a <- vapply(base$sentence1, function(x) length(tokenizar(x)), integer(1))
+  n_b <- vapply(base$sentence2, function(x) length(tokenizar(x)), integer(1))
+  base$dif_log_long <- abs(log1p(n_a) - log1p(n_b))
+  base
+}
+
+# PASO 9. Transformar las tres particiones con el MISMO vocabulario entrenado.
+ent <- caracterizar_pares(ent)
+val <- caracterizar_pares(val)
+pru <- caracterizar_pares(pru)
+
+print(head(ent[c("score","cos_glove","jaccard","dif_log_long")], 5))
+```
+
+### Lectura de las variables creadas
+
+- `score`: similitud asignada por humanos, respuesta que deseamos predecir.
+- `cos_glove`: coseno entre los *promedios* de embeddings de las dos oraciones. Puede estar entre −1 y 1; es una característica automática, no la respuesta supervisada.
+- `jaccard`: proporción de palabras distintas compartidas respecto de la unión de vocabularios de ambas oraciones. Sirve como línea de base léxica.
+- `dif_log_long`: diferencia absoluta entre logaritmos de longitudes. Puede captar pares con tamaños muy desiguales.
+
+**Pregunta de reflexión:** ¿dos frases con palabras diferentes pueden tener alta similitud humana? Sí. Por eso Jaccard puede fallar frente a paráfrasis y motiva utilizar embeddings.
+
+**Leer la tabla impresa por `head()`:** una fila contiene cuatro números: la
+etiqueta humana `score` y nuestras tres características `cos_glove`, `jaccard`
+y `dif_log_long`. Que `cos_glove` y `jaccard` sean grandes puede sugerir una
+relación entre los textos, pero **ninguna de esas columnas es una predicción
+final**: para obtenerla falta estimar los coeficientes del modelo.
+
+```{r dispersograma, fig.cap="Los embeddings producen características útiles, pero imperfectas."}
+ggplot2::ggplot(ent, ggplot2::aes(x=cos_glove,y=score)) +
+  ggplot2::geom_point(alpha=0.22, colour=color_ls, size=1.2) +
+  ggplot2::geom_smooth(method="lm", se=FALSE,
+                       colour=color_lad, linewidth=1.15) +
+  ggplot2::labs(title="Geometría vectorial y similitud humana",
+                subtitle="Una recta captura tendencia media, pero no toda la variabilidad",
+                x="Coseno de los embeddings", y="Similitud humana [0,1]") +
+  tema()
+```
+
+**Interpretación:** una tendencia creciente indica asociación positiva. La nube vertical alrededor de la tendencia ilustra que dos pares con coseno parecido pueden recibir calificaciones humanas diferentes. El ajuste LS únicamente reduce errores cuadrados; no entiende reglas semánticas por sí mismo.
+
+## 4. Estandarización sin filtración de información
+
+### La ecuación matemática que estimaremos
+
+Ahora tenemos exactamente **una variable respuesta** y **tres variables
+explicativas**. Para el par de oraciones \(i\), definimos:
+
+- \(Y_i=\operatorname{score}_i\): similitud humana, en la escala \([0,1]\).
+- \(C_i\): coseno de los embeddings promedio de las dos oraciones.
+- \(J_i\): similitud de Jaccard entre sus palabras.
+- \(D_i\): diferencia logarítmica de sus longitudes.
+
+Primero estandarizamos cada característica utilizando **solo los datos de
+entrenamiento**:
+
+\[
+Z_{1i}=\frac{C_i-\mu_C}{\sigma_C},\qquad
+Z_{2i}=\frac{J_i-\mu_J}{\sigma_J},\qquad
+Z_{3i}=\frac{D_i-\mu_D}{\sigma_D}.
+\]
+
+Por tanto, **la regresión múltiple que el código entrega a R es**:
+
+\[
+\boxed{
+Y_i=\beta_0+\beta_1Z_{1i}+\beta_2Z_{2i}+\beta_3Z_{3i}
++\varepsilon_i
+}
+\]
+
+De forma completamente explícita, reemplazando cada variable estandarizada:
+
+\[
+\boxed{
+Y_i=\beta_0
++\beta_1\frac{C_i-\mu_C}{\sigma_C}
++\beta_2\frac{J_i-\mu_J}{\sigma_J}
++\beta_3\frac{D_i-\mu_D}{\sigma_D}
++\varepsilon_i.
+}
+\]
+
+El modelo produce predicciones mediante
+\(\widehat Y_i=\widehat\beta_0+\widehat\beta_1Z_{1i}+
+\widehat\beta_2Z_{2i}+\widehat\beta_3Z_{3i}\), sin agregar el error
+desconocido \(\varepsilon_i\).
+
+**Interpretación de cada parámetro:** \(\beta_0\) es la predicción cuando
+las tres características toman sus medias de entrenamiento (valores
+estandarizados cero). La pendiente \(\beta_1\) indica el cambio asociado
+en la respuesta cuando el coseno aumenta **una desviación estándar**,
+manteniendo constantes Jaccard y la diferencia de longitudes; las otras
+pendientes se leen análogamente. Estas son asociaciones condicionales,
+**no efectos causales**. Aunque las etiquetas humanas están entre 0 y 1,
+una regresión lineal no restringida podría predecir valores fuera de ese
+intervalo.
+
+### ¿Por qué el programa no escribe la ecuación directamente?
+
+En R, un modelo suele especificarse con una **fórmula** que usa el símbolo
+`~`, leído como «se explica mediante». La instrucción
+`score ~ cos_glove_z + jaccard_z + dif_log_long_z` expresa exactamente el
+modelo anterior. El intercepto está incluido **automáticamente**.
+
+El código crea esa fórmula en tres operaciones lógicas:
+
+1. `paste0(variables,"_z")` añade el sufijo `_z` a los nombres de las tres características estandarizadas.
+2. `paste(predictores, collapse="+")` une esos nombres con el símbolo `+`, produciendo el texto `"cos_glove_z+jaccard_z+dif_log_long_z"`.
+3. `paste("score ~", ...)` antepone la respuesta y `as.formula()` convierte el **texto** en un objeto que `lm()`, `rq()` y `rlm()` saben interpretar.
+
+No se están multiplicando columnas ni se realizan cálculos numéricos con
+`paste()`: **solo se construye una expresión que especifica qué regresión
+debemos ajustar**. El ajuste numérico ocurre después, en las funciones
+`lm()`, `rq()` y `rlm()`.
+
+```{r escalar}
+# PASO 1. Elegir características que estarán disponibles en todos los modelos.
+variables <- c("cos_glove","jaccard","dif_log_long")
+
+# PASO 2. Calcular media y desviación SOLO en entrenamiento.
+centro <- vapply(ent[variables], mean, numeric(1))
+escala <- vapply(ent[variables], sd, numeric(1))
+escala[escala == 0] <- 1
+
+# PASO 3. Aplicar la misma transformación a train, validación y test.
+normalizar <- function(base) {
+  for (nm in variables) {
+    base[[paste0(nm,"_z")]] <- (base[[nm]]-centro[[nm]])/escala[[nm]]
+  }
+  base
+}
+ent <- normalizar(ent)
+val <- normalizar(val)
+pru <- normalizar(pru)
+predictores <- paste0(variables,"_z")
+formula_modelo <- as.formula(paste("score ~", paste(predictores,collapse="+")))
+# PASO 4. Mostrar la ecuación que R acaba de construir (todavía sin estimar).
+print(formula_modelo)
+# PASO 5. Mostrar los valores que se usaron para estandarizar cada variable.
+print(data.frame(Variable=variables, Media_entrenamiento=round(centro,3),
+                 Desviacion_entrenamiento=round(escala,3)))
+```
+
+**Interpretación:** cada coeficiente corresponde ahora a un incremento de una desviación estándar de la variable original, manteniendo constantes las demás. La estandarización altera las unidades de los coeficientes, pero **no la variable respuesta**: las predicciones continúan en puntos de similitud de 0 a 1. Usar medias de prueba para normalizar produciría *filtración de información*.
+
+**Cómo leer estas dos salidas:** la primera muestra literalmente
+`score ~ cos_glove_z + jaccard_z + dif_log_long_z`. La segunda indica la media
+y la desviación estándar usadas para cada columna de entrada. Si, por ejemplo,
+una observación tuviera \(C_i=\mu_C+\sigma_C\), su variable `cos_glove_z`
+valdría exactamente **1**. Las medias de validación y prueba **no** se usan
+para cambiar esa transformación.
+
+## 5. Los tres modelos supervisados en R
+
+### Una misma fórmula, tres maneras de aprender los coeficientes
+
+Los tres ajustes reciben **exactamente la misma fórmula** y las mismas filas
+de entrenamiento. Para simplificar la lectura, piense que el argumento
+`data=ent` significa «busque las columnas mencionadas en la fórmula dentro
+de la tabla `ent`»:
+
+| Objeto de R | Función que lo produce | Qué intenta minimizar | Cómo interpretamos la predicción |
+|:--|:--|:--|:--|
+| `modelo_ls` | `stats::lm()` | Suma de residuos al cuadrado, \(\sum_i e_i^2\). | Ajuste de media condicional si el modelo está correctamente especificado. |
+| `modelo_lad` | `quantreg::rq(tau=0.5)` | Suma de residuos absolutos, \(\sum_i|e_i|\). | Ajuste de mediana condicional. |
+| `modelo_huber` | `MASS::rlm(method="M")` | Suma de pérdidas robustas de Huber, escaladas internamente. | Centro robusto determinado por la función de pérdida. |
+
+En todos los casos, \(e_i=Y_i-\widehat Y_i\). El símbolo `tau=0.5` indica
+el **cuantil 50 %** en LAD; `maxit=200` fija el máximo de iteraciones
+permitidas al algoritmo iterativo de Huber. Una vez guardados los objetos,
+`summary(modelo_ls)`, `summary(modelo_lad,...)` y
+`summary(modelo_huber)` solicitan a R tres informes estadísticos.
+
+**La diferencia entre funciones y resultados:** `lm()` **calcula** un ajuste
+y lo guarda bajo el nombre `modelo_ls`; `coef(modelo_ls)` **extrae** sus
+coeficientes; `predict(modelo_ls, newdata=val)` **aplica** esos coeficientes
+a datos nuevos. Son tres operaciones diferentes.
+
+El llamado a `saveRDS()` no forma parte del ajuste ni modifica los modelos:
+guarda un archivo local con columnas derivadas para que el laboratorio de
+redes neuronales y el panel Shiny puedan utilizar **las mismas particiones
+de datos** sin repetir el costoso entrenamiento de embeddings.
+
+```{r ajustar-tres}
+# PASO 1. LS: minimiza suma de errores al cuadrado.
+modelo_ls <- stats::lm(formula_modelo, data=ent)
+
+# PASO 2. LAD: minimiza suma de errores absolutos, cuantil tau=0.5.
+modelo_lad <- quantreg::rq(formula_modelo, tau=0.5, data=ent)
+
+# PASO 3. M de Huber: contribución aproximadamente cuadrática para residuos
+# pequeños y lineal en magnitud para residuos grandes (escala robusta interna).
+modelo_huber <- MASS::rlm(formula_modelo, data=ent,
+                         method="M", psi=MASS::psi.huber, maxit=200)
+
+# PASO 3B. Guardar SOLO características derivadas para la interfaz Shiny.
+# Este archivo se crea localmente con datos STS oficiales al ejecutar la práctica.
+saveRDS(list(
+  train=ent[c("score",predictores,"sentence1","sentence2")],
+  valid=val[c("score",predictores,"sentence1","sentence2")],
+  test=pru[c("score",predictores,"sentence1","sentence2")],
+  predictores=predictores
+), file="datos/STS_features_app.rds")
+
+# PASO 4. Examinar las salidas que ofrecen las tres funciones.
+summary(modelo_ls)
+summary(modelo_lad, se="boot", R=as.integer(params$bootstrap))
+summary(modelo_huber)
+```
+
+### 5.1 Interpretación exhaustiva de `summary(modelo_ls)`
+
+1. **`Call`** recuerda la fórmula y los predictores estimados; verifique que la respuesta sea `score`.
+2. **`Residuals`** resume errores observados en entrenamiento: valores negativos indican predicción superior a la etiqueta; positivos, inferior.
+3. **`Estimate`** de cada predictor: variación asociada con **un aumento de una desviación estándar** de ese predictor, con los demás fijos. El intercepto estima la respuesta media para predictores en sus medias de entrenamiento.
+4. **`Std. Error`** cuantifica incertidumbre de un coeficiente bajo supuestos del modelo clásico.
+5. **`t value` y `Pr(>|t|)`** son contraste individual respecto de coeficiente cero. Una probabilidad pequeña indica evidencia de asociación lineal condicional, **no relevancia práctica ni causalidad**.
+6. **`Residual standard error`** es una escala residual en la unidad de similitud; no es el RMSE sobre datos nuevos.
+7. **`Multiple R-squared` y `Adjusted R-squared`** miden ajuste en entrenamiento, no capacidad automática para generalizar.
+8. **`F-statistic`** prueba conjuntamente que las pendientes sean cero bajo el modelo clásico. No es una comparación directa entre LS y LAD.
+
+**Ejemplo de lectura de una pendiente (sin inventar coeficientes):** si al
+ejecutar R observa `cos_glove_z` con estimación \(\widehat\beta_1=b\),
+entonces un aumento de una desviación estándar en el coseno, dejando fijas
+las otras dos variables, cambia la predicción en **\(b\) puntos de
+similitud**. El símbolo \(b\) representa el valor que **efectivamente
+muestre su salida**. Para describir un aumento de 0.10 en el coseno
+**original**, debemos convertir unidades: el cambio es
+\(0.10\widehat\beta_1/\sigma_C\). El bloque siguiente hace esa cuenta.
+
+```{r interpretacion-ls}
+# PASO 5. Transformar coeficientes a frases de interpretación numérica.
+# coef() devuelve un vector con el intercepto y las tres pendientes.
+coef_ls <- coef(modelo_ls)
+# [["cos_glove_z"]] elige UNA pendiente por su nombre.
+# Se divide por la desviación original para deshacer la estandarización.
+b_cos_unidad <- unname(coef_ls[["cos_glove_z"]]/escala[["cos_glove"]])
+# sprintf() inserta valores numéricos en un texto; cat() lo muestra.
+cat(sprintf(
+  "LS: aumentar el coseno original en 0.10, manteniendo constantes Jaccard y longitud, se asocia con un cambio estimado de %+.3f puntos en la similitud humana.\n",
+  0.10*b_cos_unidad
+))
+cat(sprintf(
+  "El R² ajustado es %.3f. Esta cifra describe entrenamiento, no rendimiento en prueba.\n",
+  summary(modelo_ls)$adj.r.squared
+))
+```
+
+### 5.1.1 Un resultado sorprendente: correlación positiva, pendiente negativa
+
+En este conjunto real puede aparecer algo que merece detenerse a discutir: la
+similitud coseno se relaciona **positivamente** con la etiqueta humana si se
+examina sola, pero su **pendiente parcial** puede ser negativa al incluir
+simultáneamente la superposición léxica (*Jaccard*).
+
+```{r signo-condicional}
+# PASO 1. Calcular la correlación marginal y la correlación entre predictores.
+cor_marginal <- cor(ent$cos_glove, ent$score)
+cor_entre_rasgos <- cor(ent$cos_glove, ent$jaccard)
+
+# PASO 2. Comparar con el coeficiente PARCIAL de la regresión múltiple.
+beta_parcial <- coef(modelo_ls)[["cos_glove_z"]]
+cat(sprintf("Correlación simple coseno–etiqueta: %+.3f.\n", cor_marginal))
+cat(sprintf("Correlación coseno–Jaccard: %+.3f.\n", cor_entre_rasgos))
+cat(sprintf("Pendiente LS parcial del coseno estandarizado: %+.3f.\n",
+            beta_parcial))
+```
+
+**Interpretación decisiva:** no es una contradicción de R. La correlación simple
+describe cómo cambian conjuntamente dos variables **sin controlar nada**. La
+pendiente múltiple pregunta qué pasa cuando el coseno cambia mientras **Jaccard
+y la diferencia de longitudes permanecen constantes**. Como coseno y Jaccard
+comparten información, la dirección de la asociación parcial puede invertirse.
+Este fenómeno de **inversión condicional** es un excelente ejemplo de por qué
+no debemos interpretar un coeficiente como una ley causal ni concluir que
+"los embeddings perjudican": aquí se trata de un GloVe pequeño y de
+predictores correlacionados.
+
+**Sintaxis de la comprobación anterior:** `cor(x,y)` calcula la correlación
+lineal de Pearson entre dos vectores; `coef(modelo_ls)[["cos_glove_z"]]`
+extrae una pendiente **parcial**. `sprintf("%+.3f", valor)` pide a R
+imprimir el signo (`+` o `−`) y tres decimales. Aunque ambos números
+provengan de los mismos datos, responden preguntas estadísticas diferentes.
+
+### 5.2 Interpretación de `summary(modelo_lad, se="boot")`
+
+- **`tau=0.5`** significa que ajustamos el cuantil condicional 50 %, es decir, la mediana condicional bajo la especificación lineal.
+- **`Value`** muestra el coeficiente LAD en las mismas unidades estandarizadas que LS.
+- **`Std. Error`** y cualquier contraste mostrado utilizan el procedimiento de inferencia elegido (aquí, bootstrap) y tienen variabilidad Monte Carlo; cambian algo con la semilla y el número de réplicas.
+- **`t value` y `Pr(>|t|)`**, si aparecen, son resúmenes de inferencia aproximada para la mediana condicional. Su lógica estadística no debe trasladarse a la salida de Huber sin justificación.
+- En general **no existe un `R²` de OLS directamente comparable** en `summary.rq`. El pseudocoeficiente de ajuste cuantílico no es el mismo índice.
+
+```{r interpretacion-lad}
+# Recuperar la pendiente de la regresión de la mediana (tau=0.5).
+# La división convierte una unidad estandarizada a una unidad de coseno.
+b_cos_lad <- unname(coef(modelo_lad)[["cos_glove_z"]]/escala[["cos_glove"]])
+cat(sprintf(
+  "LAD: ante un incremento de 0.10 en el coseno original, el modelo estima un cambio de %+.3f puntos en la MEDIANA condicional de similitud, manteniendo fijos los otros predictores.\n",
+  0.10*b_cos_lad
+))
+```
+
+### 5.3 Interpretación de `summary(modelo_huber)`
+
+- **`Value`** estima la asociación lineal bajo una función de puntuación robusta.
+- **`Std. Error`** y **`t value`** se ofrecen como diagnóstico aproximado del ajuste, pero `MASS::summary.rlm` **no entrega, por defecto, valores p convencionales respaldados por el mismo cálculo que `lm`**.
+- **`Residual standard error` o `s`**, según el método de impresión, representa una escala robusta interna usada al estandarizar residuales.
+- **`weights`** del objeto son pesos robustos que descienden para residuos estandarizados grandes. Un peso bajo es una señal para investigar la observación, no una prueba de etiqueta errónea.
+- Huber **reduce influencia de atípicos verticales** de respuesta; no garantiza robustez ante puntos extremos en las variables explicativas.
+
+```{r interpretacion-huber}
+# Extraer la misma pendiente del ajuste M de Huber y desestandarizarla.
+b_cos_huber <- unname(coef(modelo_huber)[["cos_glove_z"]]/escala[["cos_glove"]])
+cat(sprintf(
+  "Huber: un aumento de 0.10 en el coseno original se asocia con %+.3f puntos de variación del ajuste robusto, dejando constantes las demás variables.\n",
+  0.10*b_cos_huber
+))
+cat(sprintf(
+  "Escala robusta de residuos (modelo M): %.4f. Proporción de pesos inferiores a 0.8: %.1f%%.\n",
+  modelo_huber$s, mean(modelo_huber$w < 0.8)*100
+))
+```
+
+```{r pesos-huber, fig.cap="Pesos internos del ajuste robusto. Un peso pequeño reduce la influencia relativa del caso."}
+# Cada fila combina el peso asignado por Huber y su residuo.
+data_pesos <- data.frame(peso=modelo_huber$w,
+                        residual=as.numeric(resid(modelo_huber)))
+# El eje horizontal muestra el tamaño del error, sin importar el signo.
+# El eje vertical muestra la importancia relativa dada a esa fila.
+ggplot2::ggplot(data_pesos, ggplot2::aes(x=abs(residual),y=peso)) +
+  ggplot2::geom_point(alpha=0.32, colour=color_huber) +
+  ggplot2::labs(title="¿Qué observaciones reciben menos peso?",
+                subtitle="Huber reduce la influencia de residuos grandes",
+                x="Valor absoluto del residuo", y="Peso robusto") +
+  ggplot2::coord_cartesian(ylim=c(0,1.05)) + tema()
+```
+
+**Lectura visual:** la disminución de pesos al crecer el residuo ilustra el mecanismo de Huber. No prueba que LAD o Huber obtengan necesariamente menor error de prueba: eso se verifica con predicciones fuera de muestra.
+
+## 6. Incertidumbre robusta: bootstrap de coeficientes
+
+El bootstrap remuestrea **pares completos** \((\mathbf{x}_i,y_i)\) de entrenamiento. Para Huber produce intervalos percentiles exploratorios. No sustituye automáticamente un análisis inferencial definitivo si existe dependencia entre observaciones o selección compleja de datos.
+
+### Entender el bootstrap antes de leer su programación
+
+La pregunta es: *¿cuánto podrían variar las pendientes si observáramos otra
+muestra semejante?* El algoritmo utiliza las observaciones disponibles para
+generar muchas muestras alternativas **con reemplazo**:
+
+1. `sample.int(nrow(ent), replace=TRUE)` elige tantas posiciones de filas como tiene entrenamiento. Algunas filas aparecerán varias veces y otras no aparecerán.
+2. `ent[indices, , drop=FALSE]` construye la tabla remuestreada, preservando juntos cada par de frases y su `score`.
+3. `MASS::rlm(...)` estima de nuevo los coeficientes en esa tabla.
+4. `replicate(B,...)` repite ese procedimiento \(B\) veces; `apply(...,1,quantile)` resume, por **coeficiente**, los percentiles 2.5 % y 97.5 %.
+
+`tryCatch()` es una medida de seguridad: si una réplica produce un fallo
+numérico, no interrumpe de inmediato todo el documento. Se registra un
+`NA`, que significa «valor no disponible», y el cálculo del intervalo
+lo omite (`na.rm=TRUE`). Si hubiera muchos fallos, los intervalos serían
+menos confiables y habría que investigar antes de concluir.
+
+Para una primera ejecución en clase, el parámetro `bootstrap: 120` ofrece
+una demostración relativamente rápida. **120 réplicas son pocas para
+inferencias definitivas**, pero bastan para introducir la idea. Aumentarlas
+mejora la estabilidad Monte Carlo y exige más tiempo de cálculo.
+
+```{r bootstrap-huber}
+# PASO 1. Definir una réplica de bootstrap sobre pares completos.
+una_replica <- function(i) {
+  muestra <- ent[sample.int(nrow(ent), replace=TRUE), , drop=FALSE]
+  ajuste <- tryCatch(
+    MASS::rlm(formula_modelo, data=muestra, method="M",
+              psi=MASS::psi.huber, maxit=150),
+    error=function(e) NULL
+  )
+  if (is.null(ajuste)) return(rep(NA_real_, length(coef(modelo_huber))))
+  as.numeric(coef(ajuste))
+}
+
+# PASO 2. Construir B réplicas con semilla reproducible.
+set.seed(504)
+replicas <- replicate(as.integer(params$bootstrap), una_replica(1))
+rownames(replicas) <- names(coef(modelo_huber))
+
+# PASO 3. Cuantiles 2.5 % y 97.5 % para cada pendiente.
+ic_huber <- t(apply(replicas, 1, stats::quantile,
+                    probs=c(0.025,0.975), na.rm=TRUE))
+tabla_ic <- data.frame(Variable=rownames(ic_huber),
+  Estimacion=as.numeric(coef(modelo_huber)),
+  LI_95=ic_huber[,1], LS_95=ic_huber[,2])
+# PASO 4. Redondear los NÚMEROS, pero conservar la columna de nombres.
+# Así se ve a qué coeficiente corresponde cada intervalo.
+tabla_ic$Estimacion <- round(tabla_ic$Estimacion, 3)
+tabla_ic$LI_95 <- round(tabla_ic$LI_95, 3)
+tabla_ic$LS_95 <- round(tabla_ic$LS_95, 3)
+print(tabla_ic, row.names=FALSE)
+```
+
+**Interpretación:** la columna `Variable` identifica el intercepto o la pendiente; `Estimacion` es el coeficiente del ajuste original, y `LI_95`/`LS_95` son los extremos del intervalo percentil del bootstrap. Compare cero con `LI_95` y `LS_95`: si el intervalo no incluye cero, la asociación es compatible con un signo definido bajo este remuestreo y este modelo, pero no demuestra causalidad. Los intervalos cambian ligeramente al aumentar `params$bootstrap`. Si son amplios, la estabilidad de los coeficientes es limitada. Son intervalos **aproximados**, especialmente con solo 120 réplicas.
+
+## 7. Evaluación supervisada sin reutilizar el conjunto de prueba
+
+**Tres métricas complementarias:**
+
+\[
+\mathrm{MAE}=\frac1n\sum_i|y_i-\hat y_i|,
+\qquad
+\mathrm{RMSE}=\sqrt{\frac1n\sum_i(y_i-\hat y_i)^2},
+\qquad
+\rho_s=\mathrm{cor}_{\mathrm{Spearman}}(y,\hat y).
+\]
+
+MAE expresa error promedio absoluto en puntos de similitud; RMSE penaliza con mayor fuerza errores grandes; Spearman mide la calidad del ordenamiento y no usa esas mismas unidades.
+
+### ¿Por qué necesitamos escribir funciones para evaluar los modelos?
+
+Cuando entrenamos, R aprende coeficientes usando `ent`. Para evaluar el
+resultado debemos **dejar de entrenar** y pedir predicciones sobre observaciones
+que no participaron en ese ajuste. `predict(modelo_ls, newdata=val)`
+devuelve un número por cada fila de `val`.
+
+Para que la comparación sea justa, escribiremos **una sola función de métricas**
+y la aplicaremos sin cambios a los tres modelos. Es útil distinguir las
+funciones que aparecen en el bloque:
+
+| Instrucción | Traducción a lenguaje cotidiano |
+|:--|:--|
+| `metricas(verdad, prediccion, nombre)` | Recibe las etiquetas humanas, los valores calculados por el modelo y su nombre; devuelve una fila con MAE, RMSE y Spearman. |
+| `stopifnot(...)` | Detiene la ejecución si los dos vectores no tienen igual longitud o hay predicciones no finitas. |
+| `lapply(modelos, ...)` | Pide una predicción a cada uno de los tres modelos y guarda los resultados en una lista. |
+| `Map(function(n,p) ..., names(pp), pp)` | Empareja cada nombre de modelo con su vector de predicciones. |
+| `do.call(rbind, ...)` | Apila las tres filas de métricas en una única tabla. |
+| `order(tabla$MAE)` | Obtiene el orden de las filas desde el MAE menor hasta el mayor. |
+| `transform(..., MAE=round(MAE,4))` | Prepara una copia de la tabla con números redondeados **solo para mostrarlos**. |
+
+**Ejemplo numérico didáctico:** si dos predicciones tienen errores \(+0.1\)
+y \(-0.2\), entonces \(\mathrm{MAE}=(0.1+0.2)/2=0.15\), mientras
+\(\mathrm{RMSE}=\sqrt{(0.1^2+0.2^2)/2}\approx0.158\). Son errores en puntos
+de la escala 0–1, no porcentajes. La tabla real se calcula con **todos** los
+pares disponibles de validación o prueba.
+
+**Regla metodológica:** se utiliza validación para escoger el método con
+menor MAE; después se consulta prueba una sola vez para evaluar esa elección.
+Cambiar de método al observar la tabla de prueba introduciría un sesgo
+optimista en la evaluación final.
+
+```{r evaluar}
+# PASO 1. Funciones de evaluación comunes a todos los algoritmos.
+metricas <- function(verdad, prediccion, nombre) {
+  stopifnot(length(verdad)==length(prediccion),
+            all(is.finite(prediccion)))
+  data.frame(Modelo=nombre,
+    MAE=mean(abs(verdad-prediccion)),
+    RMSE=sqrt(mean((verdad-prediccion)^2)),
+    Spearman=unname(cor(verdad,prediccion, method="spearman")))
+}
+predecir_3 <- function(datos, modelos=list(
+  LS=modelo_ls, LAD=modelo_lad, Huber=modelo_huber)) {
+  lapply(modelos, function(m) as.numeric(predict(m, newdata=datos)))
+}
+metricas_tres <- function(datos) {
+  pp <- predecir_3(datos)
+  do.call(rbind, Map(function(n,p) metricas(datos$score,p,n),
+                     names(pp), pp))
+}
+
+# PASO 2. Validación y SOLO después prueba, sin volver a ajustar con test.
+validacion <- metricas_tres(val)
+validacion <- validacion[order(validacion$MAE),]
+print(transform(validacion, MAE=round(MAE,4),
+                RMSE=round(RMSE,4), Spearman=round(Spearman,4)),
+      row.names=FALSE)
+
+# PASO 3. Elegir por MAE de validación, congelar la decisión.
+elegido <- validacion$Modelo[1]
+cat("Modelo seleccionado con validación:", elegido, "\n")
+
+# PASO 4. Evaluar los tres modelos una única vez sobre prueba.
+prueba <- metricas_tres(pru)
+prueba <- prueba[order(prueba$MAE),]
+print(transform(prueba, MAE=round(MAE,4),
+                RMSE=round(RMSE,4), Spearman=round(Spearman,4)),
+      row.names=FALSE)
+```
+
+### Interpretación completa de las salidas de evaluación
+
+- **`MAE`** de 0.15, por ejemplo *hipotético*, significaría 0.15 puntos de discrepancia absoluta promedio en una escala 0–1; equivale a 0.75 puntos en la escala original 0–5. El número real para cada modelo está en la tabla calculada, no en este ejemplo.
+- **`RMSE`** aumenta más que MAE ante errores grandes. Si LS exhibe mejor RMSE pero peor MAE, la elección depende del costo de un error grande en la aplicación.
+- **`Spearman`** cercano a 1 indica buen orden de pares por similitud; no significa calibración numérica perfecta.
+- **`Modelo seleccionado`** fue elegido por **MAE de validación**. La tabla de prueba es una evaluación final y **no debe reabrirse para seleccionar otro modelo**.
+- **Comparación legítima:** todos los modelos comparten datos, variables y particiones. Ningún resultado de entrenamiento basta para afirmar superioridad predictiva.
+
+**Cómo leer `elegido <- validacion$Modelo[1]`:** los corchetes `[1]`
+seleccionan el primer elemento de una columna. Como acabamos de ordenar
+la tabla por MAE ascendente, ese primer nombre corresponde al método
+ganador **en validación**, no necesariamente al ganador en prueba.
+
+```{r lectura-evaluacion}
+# PASO 5. Narrar resultados con cifras reales, NO prediseñadas.
+mejor <- validacion[1,]
+cat(sprintf(
+  "En validación, %s obtuvo el menor MAE (%.4f). Esto equivale a %.3f puntos en la escala STS original de 0 a 5.\n",
+  mejor$Modelo, mejor$MAE, 5*mejor$MAE
+))
+fila_test <- subset(prueba, Modelo==elegido)
+cat(sprintf(
+  "En prueba, el modelo preseleccionado %s produjo MAE=%.4f, RMSE=%.4f y Spearman=%.3f.\n",
+  elegido, fila_test$MAE, fila_test$RMSE, fila_test$Spearman
+))
+```
+
+**Conclusión basada en las cifras obtenidas:** el método con menor MAE de
+validación es **`r elegido`**. En prueba, su MAE es
+**`r sprintf('%.4f', fila_test$MAE)`** frente al MAE mínimo de prueba de
+**`r sprintf('%.4f', min(prueba$MAE))`**. Si las diferencias son de unas pocas
+milésimas, **no constituyen por sí mismas evidencia de superioridad estable**;
+se requerirían más comparaciones e intervalos para diferencias de error. El
+conjunto de prueba informa el desempeño del método que se eligió sin mirarlo,
+no autoriza a cambiar de método después.
+
+```{r comparar-graficamente, fig.cap="Errores absolutos por modelo en la partición de prueba."}
+pp_test <- predecir_3(pru)
+# PASO 6. Una regresión sin restricción puede predecir fuera de [0,1].
+# Este porcentaje es un diagnóstico, NO una nueva métrica para elegir modelo.
+print(data.frame(
+  Modelo=names(pp_test),
+  Porcentaje_fuera_01=round(100*vapply(pp_test,
+    function(p) mean(p < 0 | p > 1), numeric(1)), 2)
+), row.names=FALSE)
+tabla_errores <- do.call(rbind, lapply(names(pp_test), function(nombre) {
+  data.frame(Modelo=nombre, error=abs(pru$score-pp_test[[nombre]]))
+}))
+ggplot2::ggplot(tabla_errores,
+                ggplot2::aes(x=Modelo,y=error,fill=Modelo)) +
+  ggplot2::geom_boxplot(outlier.alpha=0.12) +
+  ggplot2::scale_fill_manual(values=c(LS=color_ls,LAD=color_lad,Huber=color_huber)) +
+  ggplot2::labs(title="Errores en frases que no se usaron para entrenar",
+                subtitle="Compare mediana, dispersión y cola de errores",
+                x=NULL,y="Error absoluto de predicción") +
+  tema() + ggplot2::theme(legend.position="none")
+```
+
+**Interpretación del diagnóstico de rango y de la figura:** `Porcentaje_fuera_01` indica la fracción de predicciones de test que quedó por debajo de 0 o por encima de 1. LS, LAD y Huber son regresiones lineales **no restringidas**; obtener porcentajes positivos no es necesariamente un error de R. En cambio, una salida sigmoide de la red obliga a que su predicción esté entre 0 y 1. En las cajas, compare la mediana, dispersión y extremos del error absoluto. No vuelva a elegir modelo a partir de ese gráfico de test.
+
+## 8. Experimento controlado: etiquetas contaminadas
+
+Una etiqueta humana puede ser ruidosa. Para estudiar robustez **simularemos** corrupción únicamente sobre el entrenamiento; **no** modificaremos datos oficiales ni diremos que las etiquetas reales estén equivocadas.
+
+### Traducir la simulación a un procedimiento experimental
+
+Esta parte **no descarga ni modifica el archivo oficial**. La línea
+`ent_ruido <- ent` crea una segunda tabla sobre la que trabajamos; la tabla
+`ent` permanece disponible para comparar los resultados sin contaminación.
+
+1. `set.seed(1212)` fija el sorteo de filas para poder repetir el experimento.
+2. `round(nrow(ent_ruido)*params$contaminar)` calcula cuántas etiquetas cambiar. Si `contaminar` vale 0.10, se modifica aproximadamente el **10 %** de las filas de entrenamiento.
+3. `sample.int(..., size=n_ruido)` selecciona esas posiciones al azar. El objeto `indices` **contiene números de fila**, no palabras ni puntuaciones.
+4. `ifelse(score >= 0.5, 0, 1)` asigna artificialmente 0 a las etiquetas seleccionadas relativamente altas y 1 a las relativamente bajas. Se trata de una **perturbación deliberada** para estudiar sensibilidad.
+5. `merge(..., by="Modelo", suffixes=...)` reúne lado a lado el MAE del entrenamiento original y el del entrenamiento contaminado, alineando correctamente los tres nombres de método.
+
+La columna `Cambio = MAE_ruido - MAE_limpio` compara ambos ajustes
+**sobre la misma validación limpia**: valores mayores que cero indican
+deterioro. Así aislamos el efecto de las etiquetas alteradas durante el
+entrenamiento; no cambiamos simultáneamente la muestra usada para evaluar.
+
+```{r experimento-contaminacion}
+# PASO 1. Copia de entrenamiento. La fuente original permanece intacta.
+set.seed(1212)
+ent_ruido <- ent
+n_ruido <- round(nrow(ent_ruido)*params$contaminar)
+indices <- sample.int(nrow(ent_ruido), size=n_ruido)
+
+# PASO 2. Invertir artificialmente 0 y 1 para los ejemplos elegidos.
+# Es una perturbación deliberadamente fuerte y fácil de explicar.
+ent_ruido$score[indices] <- ifelse(ent_ruido$score[indices] >= 0.5, 0, 1)
+
+# PASO 3. Reestimar con EXACTAMENTE las mismas variables.
+ajustes_ruido <- list(
+  LS=lm(formula_modelo, data=ent_ruido),
+  LAD=quantreg::rq(formula_modelo, tau=0.5, data=ent_ruido),
+  Huber=MASS::rlm(formula_modelo, method="M",
+                   psi=MASS::psi.huber, data=ent_ruido, maxit=200)
+)
+
+# PASO 4. Evaluación en validación LIMPIA: varía entrenamiento, no la prueba.
+tab_ruido <- do.call(rbind, lapply(names(ajustes_ruido), function(nm)
+  metricas(val$score, predict(ajustes_ruido[[nm]],newdata=val), nm)))
+comparar_mae <- merge(
+  validacion[c("Modelo","MAE")],
+  tab_ruido[c("Modelo","MAE")],
+  by="Modelo", suffixes=c("_limpio","_ruido")
+)
+comparar_mae$Cambio <- comparar_mae$MAE_ruido-comparar_mae$MAE_limpio
+print(transform(comparar_mae,
+  MAE_limpio=round(MAE_limpio,4),
+  MAE_ruido=round(MAE_ruido,4),
+  Cambio=round(Cambio,4)), row.names=FALSE)
+```
+
+### Interpretación
+
+- **`MAE_limpio`** procede de un modelo que aprendió etiquetas oficiales sin contaminar.
+- **`MAE_ruido`** corresponde a un modelo entrenado sobre etiquetas modificadas deliberadamente.
+- **`Cambio` positivo** indica deterioro; **negativo**, mejora inesperada en ese experimento particular. Ningún método tiene obligación matemática de ganar siempre.
+- Si Huber y LAD se deterioran menos que LS, la observación ilustra robustez ante **perturbaciones en \(y\)**. No basta una repetición para establecer superioridad general.
+
+**Actividad de investigación:** cambie `params$contaminar` a 0.05 y 0.20, repita con tres semillas y compare tanto la variación de los coeficientes como el MAE de validación. Justifique un método según su costo de error.
+
+## 9. Puente a redes neuronales: la pérdida se mantiene
+
+Para una red con pesos \(W\), la salida es una función no lineal \(\hat y=f_W(\mathbf x)\). El entrenamiento también minimiza:
+
+\[
+\hat W=\underset{W}{\arg\min}\frac1n\sum_{i=1}^n
+\mathcal L\bigl(y_i,f_W(\mathbf x_i)\bigr).
+\]
+
+En este laboratorio la red recibe **las mismas tres características** que LS, LAD y Huber. La comparación es entre cabezas predictivas, **no un entrenamiento completo de BERT**. El mecanismo de retropropagación propaga gradientes de la pérdida hacia los pesos.
+
+### Qué debe leer un estudiante que todavía no domina redes neuronales
+
+El bloque que sigue es **opcional** y está desactivado en el encabezado
+del archivo (`correr_red: false`). No necesita instalar TensorFlow ni
+entender todas sus instrucciones para completar los ejercicios de LS,
+LAD y Huber.
+
+Si decide explorarlo, la traducción conceptual es:
+
+- `as.matrix(ent[predictores])` convierte las tres columnas explicativas en una matriz numérica \(X\) para la red; `as.numeric(ent$score)` construye el vector respuesta \(y\).
+- `layer_dense(units=...)` agrega capas de neuronas; `relu` es una activación no lineal y `sigmoid` restringe las predicciones entre 0 y 1.
+- `compile(loss=...)` especifica **qué error se quiere minimizar** (MSE, MAE o Huber). `optimizer_adam()` determina **cómo se actualizan los pesos** durante la optimización.
+- `fit(...)` entrena durante varias épocas; `validation_data` separa los datos usados para vigilar la generalización; `callback_early_stopping()` detiene el proceso si la validación no mejora.
+- `isTRUE(params$correr_red)` consulta la opción del encabezado YAML. Si es `FALSE`, R omite el entrenamiento y solo imprime un aviso: **no es un error de compilación**.
+
+El laboratorio independiente `S4_Red_Neuronal_R_Base.Rmd` desarrolla este
+puente **en R puro** para que el estudiante pueda estudiar los gradientes
+sin depender de bibliotecas externas de aprendizaje profundo.
+
+```{r red-neuronal-opcional}
+# IMPORTANTE. Este bloque se ejecuta SOLO con params$correr_red: true
+# y tras instalar keras3 y un backend compatible (normalmente TensorFlow).
+#
+# install.packages(c("keras3","reticulate"))
+# keras3::install_keras(backend="tensorflow")
+
+if (isTRUE(params$correr_red)) {
+  if (!requireNamespace("keras3",quietly=TRUE))
+    stop("Instale keras3 y su backend antes de activar la red neuronal.")
+
+  # PASO 1. Utilizar matrices con las MISMAS columnas de regresión clásica.
+  Xent <- as.matrix(ent[predictores])
+  Xval <- as.matrix(val[predictores])
+  Xpru <- as.matrix(pru[predictores])
+  yent <- as.numeric(ent$score)
+  yval <- as.numeric(val$score)
+
+  # PASO 2. Crear una red pequeña: 3 entradas, 12 y 8 neuronas ocultas.
+  crear_red <- function(perdida) {
+    keras3::set_random_seed(100)
+    red <- keras3::keras_model_sequential(input_shape=c(length(predictores))) |>
+      keras3::layer_dense(units=12, activation="relu") |>
+      keras3::layer_dense(units=8, activation="relu") |>
+      keras3::layer_dense(units=1, activation="sigmoid")
+    keras3::compile(red,
+      optimizer=keras3::optimizer_adam(learning_rate=0.002),
+      loss=perdida,
+      metrics=list(keras3::metric_mean_absolute_error()))
+    red
+  }
+
+  # PASO 3. Definir exactamente tres funciones de pérdida.
+  perdidas <- list(
+    MSE="mse",
+    MAE="mae",
+    Huber=function(y_true,y_pred) keras3::loss_huber(y_true,y_pred,delta=0.15)
+  )
+
+  # PASO 4. Entrenar con la MISMA validación y parada temprana.
+  redes <- list()
+  historiales <- list()
+  for (nombre in names(perdidas)) {
+    red <- crear_red(perdidas[[nombre]])
+    hist <- keras3::fit(
+      red, Xent, yent,
+      validation_data=list(Xval,yval),
+      epochs=60, batch_size=32, verbose=0,
+      callbacks=list(keras3::callback_early_stopping(
+        monitor="val_loss", patience=6, restore_best_weights=TRUE))
+    )
+    redes[[nombre]] <- red
+    historiales[[nombre]] <- hist
+  }
+
+  # PASO 5. Comparar las tres redes mediante la MISMA métrica de VALIDACIÓN.
+  # val_loss NO sirve para comparar directamente MSE, MAE y Huber: las
+  # tres pérdidas tienen escalas diferentes. Aquí el MAE sí es común.
+  tabla_redes_val <- do.call(rbind, lapply(names(redes), function(nm) {
+    pred <- as.numeric(keras3::predict(redes[[nm]],Xval,verbose=0))
+    metricas(yval,pred,paste0("Red_",nm))
+  }))
+  tabla_redes_val <- tabla_redes_val[order(tabla_redes_val$MAE),]
+  print(tabla_redes_val)
+  red_elegida <- sub("^Red_", "", tabla_redes_val$Modelo[1])
+  cat("Red seleccionada exclusivamente por MAE en validación:",
+      red_elegida, "\n")
+
+  # PASO 6. Congelar la selección; usar test como evaluación independiente.
+  tabla_redes <- do.call(rbind, lapply(names(redes), function(nm) {
+    pred <- as.numeric(keras3::predict(redes[[nm]],Xpru,verbose=0))
+    metricas(pru$score,pred,paste0("Red_",nm))
+  }))
+  print(tabla_redes)
+
+  # PASO 7. Explicar cada salida en la misma escala STS.
+  for (j in seq_len(nrow(tabla_redes))) {
+    z <- tabla_redes[j,]
+    cat(sprintf(
+      "%s: MAE de %.4f = %.3f puntos de similitud STS original; RMSE=%.4f; Spearman=%.3f.\n",
+      z$Modelo,z$MAE,5*z$MAE,z$RMSE,z$Spearman))
+  }
+  cat("Resultado de la red seleccionada (NO de la mejor a posteriori en test):\n")
+  print(subset(tabla_redes, Modelo==paste0("Red_",red_elegida)))
+
+  # PASO 8. Inspeccionar las últimas épocas de la red seleccionada.
+  # Las pérdidas no son métricas intercambiables entre entrenamientos.
+  registro <- as.data.frame(historiales[[red_elegida]])
+  print(utils::tail(registro, 5))
+} else {
+  cat("Módulo de red neuronal desactivado para permitir la ejecución rápida.\n")
+  cat("Cambie el parámetro YAML correr_red: true cuando instale keras3 y TensorFlow.\n")
+}
+```
+
+**Qué interpreta el estudiante:** `val_loss` controla la parada temprana, pero es una magnitud distinta para cada pérdida: **no compare el número `val_loss` de MSE con el de MAE como si fueran la misma métrica**. La tabla `tabla_redes_val` expresa MAE, RMSE y Spearman sobre **las mismas oraciones de validación**; la primera fila identifica la mejor red por MAE de validación. La tabla `tabla_redes` informa el rendimiento independiente en test, sin volver a seleccionar por esa columna. Si se realizan ajustes posteriores después de observar test, deberá reservarse un nuevo conjunto de evaluación final.
+
+**Historial de entrenamiento:** `epoch` representa una pasada de entrenamiento; `loss` es la pérdida optimizada en entrenamiento y `val_loss` su valor en validación. Las columnas de MAE, si aparecen en `registro`, mantienen una escala común de error absoluto. Una caída sostenida de `loss` con subida de `val_loss` sugiere sobreajuste; la parada temprana intenta limitarlo. Los valores concretos deben leerse de `tail(registro, 5)`.
+
+## 10. Opcional: embeddings preentrenados de Sentence-BERT desde R
+
+GloVe promedia vectores de palabras y puede perder información del orden. Un *sentence embedding* contextualizado representa la oración completa. El siguiente código está **escrito en R**, aunque internamente `reticulate` accede a una biblioteca de modelos preentrenados. El primer uso descarga los pesos y requiere una instalación adicional; no es indispensable para terminar las secciones anteriores.
+
+**Guía de lectura para este bloque avanzado:** `params$correr_sbert` funciona
+como un interruptor; empieza en `false`, por lo que la práctica principal
+termina sin este cálculo. Cuando se activa, `reticulate` permite llamar a una
+biblioteca externa escrita en Python desde instrucciones de R;
+`SentenceTransformer()` carga un codificador preentrenado;
+`encoder$encode(...)` transforma cada oración en un vector, y `py_to_r()`
+convierte la salida en un objeto comprensible para R. La tabla final compara
+**correlaciones de Spearman**, no coeficientes de regresión ni una prueba
+definitiva de superioridad de modelos.
+
+```{r sbert-opcional}
+if (isTRUE(params$correr_sbert)) {
+  if (!requireNamespace("reticulate",quietly=TRUE))
+    stop("Instale reticulate para activar el módulo Sentence-BERT.")
+
+  # PASO 1. Declarar la dependencia y descargar un modelo preentrenado.
+  reticulate::py_require("sentence-transformers")
+  st <- reticulate::import("sentence_transformers")
+  encoder <- st$SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2",
+                                    device="cpu")
+
+  # PASO 2. Procesar una SUBMUESTRA DE VALIDACIÓN, definida antes de mirar resultados.
+  set.seed(108)
+  filas <- sample.int(nrow(val), min(200L,nrow(val)))
+  muestra <- val[filas,,drop=FALSE]
+  A <- reticulate::py_to_r(encoder$encode(
+    as.list(muestra$sentence1), batch_size=32L, show_progress_bar=FALSE))
+  B <- reticulate::py_to_r(encoder$encode(
+    as.list(muestra$sentence2), batch_size=32L, show_progress_bar=FALSE))
+
+  # PASO 3. Comparar correlaciones exploratorias sobre validación, no test.
+  m <- data.frame(etiqueta=muestra$score,
+    cos_glove=muestra$cos_glove,
+    cos_sbert=coseno_filas(as.matrix(A),as.matrix(B)))
+  print(data.frame(
+    Embedding=c("GloVe didáctico","SBERT preentrenado"),
+    Spearman=c(cor(m$etiqueta,m$cos_glove,method="spearman"),
+               cor(m$etiqueta,m$cos_sbert,method="spearman"))
+  ))
+} else cat("SBERT opcional: desactivado.\n")
+```
+
+**Interpretación:** aquí la tabla de correlaciones es **solo una comparación descriptiva de dos representaciones ya entrenadas** sobre validación, que puede orientar decisiones sin consultar `pru` (test). Un *modelo preentrenado* puede haber visto datos similares durante su preentrenamiento; por eso esta práctica no pretende reportar resultados de un concurso oficial.
+
+## 11. ¿Dónde vuelve a aparecer LS en el entrenamiento de un embedding?
+
+Dos conexiones diferentes deben distinguirse:
+
+1. **Aprender embeddings GloVe:** una optimización de mínimos cuadrados *ponderados* sobre coocurrencias, con parámetros vectoriales aprendidos conjuntamente.
+2. **Ajustar similitud entre dos embeddings:** una regresión supervisada LS/LAD/Huber sobre características numéricas (secciones 4 a 8), o una red con esas pérdidas (sección 9).
+
+En los modelos neuronales de `sentence-transformers`, `CosineSimilarityLoss` compara la similitud coseno predicha y la etiqueta. Su función de pérdida predeterminada usa el error cuadrático medio. La documentación oficial permite funciones de pérdida alternativas; esto muestra una conexión técnica directa, aunque un entrenamiento completo del codificador contextual exige más recursos que los de esta práctica.
+
+Fuentes oficiales: [CosineSimilarityLoss](https://sbert.net/docs/package_reference/sentence_transformer/losses.html) y [entrenamiento STS](https://sbert.net/examples/sentence_transformer/training/sts/README.html).
+
+## 12. Práctica autónoma: decisiones que hay que defender
+
+1. Interprete el signo de las pendientes de LS, LAD y Huber para `cos_glove_z`, `jaccard_z` y `dif_log_long_z`. ¿Qué significa «manteniendo constantes» en un modelo múltiple?
+2. ¿Por qué `cos_glove` puede producir predicciones inferiores a cero si se usa una regresión lineal sin restricción? ¿Qué cambia al usar una activación sigmoide en la red?
+3. Calcule el número de observaciones con `modelo_huber$w < 0.5`; localice dos pares de oraciones con grandes residuos. Inspeccione sus textos, sin presumir que sus etiquetas son erróneas.
+4. Repita con `params$contaminar=0.05` y `0.20`. Indique qué modelo pierde menos MAE de validación y si su conclusión cambia con la semilla.
+5. Compare el coeficiente LS de coseno con el de LAD en unidades **originales** para un cambio \(\Delta\cos=0.10\). Explique por qué la interpretación estadística no es idéntica.
+6. Defienda una elección para un buscador educativo que relaciona una pregunta de estudiante con la respuesta de un profesor. ¿Prefiere reducir el error habitual (MAE) o evitar errores muy grandes (RMSE)? Justifique con un costo operativo.
+7. **Reto avanzado:** en una nueva iteración, compare GloVe con Sentence-BERT usando `val` para elegir modelo y `pru` una vez para concluir. Anote uso de CPU, instalación, tiempo y límites de comparabilidad.
+
+## 13. Conclusión conceptual
+
+Una IA que trabaja con texto todavía debe representar datos, definir una respuesta y minimizar un error. LS, LAD y Huber no han desaparecido: aparecen como **funciones de pérdida, objetivos de optimización y herramientas de análisis predictivo**. Una red neuronal cambia la familia de funciones que se puede ajustar. Los embeddings cambian la representación de entrada. La elección de pérdida sigue teniendo consecuencias estadísticas y prácticas.
+
+### Fuentes verificables
+
+- Cer, D. y colaboradores (2017). *SemEval-2017 Task 1: Semantic Textual Similarity Multilingual and Crosslingual Focused Evaluation*. https://aclanthology.org/S17-2001/
+- STS Benchmark: https://huggingface.co/datasets/sentence-transformers/stsb
+- Reimers, N. y Gurevych, I. (2019). *Sentence-BERT*. https://aclanthology.org/D19-1410/
+- Pennington, J., Socher, R. y Manning, C. (2014). *GloVe: Global Vectors for Word Representation*. https://aclanthology.org/D14-1162/
+- Documentación de `text2vec`: https://text2vec.org/glove.html
+- `MASS::rlm`: https://search.r-project.org/CRAN/refmans/MASS/html/rlm.html
+- `quantreg::summary.rq`: https://search.r-project.org/CRAN/refmans/quantreg/html/summary.rq.html
+- `keras3`: https://keras3.posit.co/
+- `reticulate`: https://rstudio.github.io/reticulate/
+
+**Nota editorial para estudiantes:** el documento integra resultados en tiempo de ejecución. Nunca interprete como observado un número que todavía no se haya obtenido al compilar en su equipo. El código conserva datos originales, valida rangos y reserva la partición de prueba.

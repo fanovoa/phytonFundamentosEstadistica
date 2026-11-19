@@ -1,0 +1,225 @@
+00_utilidades.R cargado.
+
+==========================================================================
+A. ESTRUCTURA Y CALIDAD DE LOS DATOS
+==========================================================================
+            variable                             tipo n_categorias faltantes
+               fecha                  Fecha (mensual)           12         0
+               grupo              Cualitativa nominal            8         0
+            producto              Cualitativa nominal          349         0
+                 cpc                    Identificador          140         0
+             mercado              Cualitativa nominal           80         0
+              ciudad              Cualitativa nominal           59         0
+        departamento              Cualitativa nominal           24         0
+              region              Cualitativa nominal            5         0
+          tipo_plaza      Cualitativa ordinal-nominal            4         0
+          es_capital              Cualitativa binaria            2         0
+           precio_kg            Cuantitativa continua           NA         0
+          brecha_pct Cuantitativa continua (derivada)           NA         0
+ n_mercados_producto Cuantitativa discreta (derivada)           45         0
+  [tabla ] salidas/tablas/01_estructura_variables.csv
+
+Registros totales        : 54042 
+Registros duplicados     : 0 
+Valores faltantes totales: 0 
+Periodo cubierto         : Enero a Diciembre de 2024
+
+Mercados por producto  -> mediana: 10 | minimo: 1 | maximo: 46 
+Productos por mercado  -> mediana: 44 | minimo: 1 | maximo: 213 
+Panel completo teorico : 335040 celdas; observadas: 54042 (16.1%)
+  [tabla ] salidas/tablas/02_cobertura_por_mercado.csv
+
+==========================================================================
+B.1 VARIABLE CUANTITATIVA 1: PRECIO POR KILOGRAMO (COP/kg)
+==========================================================================
+     n    media mediana desv_est cv_pct minimo   q1      q3 maximo rango_iq
+ 54042 10568.84    4945 13902.87 131.55    265 2434 15439.5 191528  13005.5
+ asimetria curtosis
+      4.61    37.58
+  [tabla ] salidas/tablas/03_resumen_precio_global.csv
+
+Limites de Tukey: $-17.074 a $34.948 
+Atipicos por Tukey: 2216 (4.1% de los registros)
+La asimetria positiva (4.61) y la curtosis (37.58) muestran una distribucion fuertemente sesgada a la derecha.
+Tras transformar a log10 la asimetria baja a 0.08.
+  [figura] salidas/figuras/01_distribucion_precio.png
+  [figura] salidas/figuras/02_qqplot_precio.png
+
+==========================================================================
+B.2 VARIABLE CUANTITATIVA 2: COEFICIENTE DE VARIACION INTERMERCADO (%)
+==========================================================================
+Unidad de analisis: producto x mes con >= 5 mercados cotizantes.
+Pares producto-mes analizados: 2987 de 4137 
+
+    n media mediana desv_est cv_pct minimo    q1    q3 maximo rango_iq
+ 2987 19.25   16.34    11.14  57.88   2.31 10.71 25.17  73.35    14.46
+ asimetria curtosis
+      1.18     1.37
+  [tabla ] salidas/tablas/04_resumen_cv_global.csv
+
+Interpretacion: en el par producto-mes tipico el precio mayorista varia 16.3% 
+alrededor de su media nacional segun el mercado donde se cotice.
+Razon maximo/minimo mediana: 1.75 
+  [figura] salidas/figuras/03_distribucion_cv.png
+
+==========================================================================
+C.1 PRECIO Y DISPERSION POR GRUPO ALIMENTARIO
+==========================================================================
+                         grupo     n   media mediana desv_est cv_pct      q1
+                        CARNES  8685 21593.6 21438.0   8756.2   40.5 16063.0
+                      PESCADOS  2918 23062.8 18806.5  13956.6   60.5 13850.0
+              LACTEOS Y HUEVOS  2321 13236.3 15325.0  13863.0  104.7   480.0
+                    PROCESADOS  8544 18427.1 11006.5  24394.9  132.4  4225.8
+             GRANOS Y CEREALES  3615  5532.0  4513.0   2816.4   50.9  3514.5
+                        FRUTAS 12891  4885.5  3724.0   3479.1   71.2  2332.5
+         VERDURAS Y HORTALIZAS 11112  3233.9  2493.5   2380.6   73.6  1648.0
+ TUBERCULOS, RAICES Y PLATANOS  3956  2337.9  2113.0   1103.4   47.2  1569.0
+      q3
+ 26250.0
+ 27571.5
+ 20000.0
+ 23835.2
+  7459.5
+  6925.5
+  4009.5
+  2866.0
+  [tabla ] salidas/tablas/05_precio_por_grupo.csv
+
+                         grupo   n media ic95_inf ic95_sup mediana   q1   q3
+         VERDURAS Y HORTALIZAS 557  30.0    28.79    31.11    27.9 19.6 40.9
+                        FRUTAS 679  21.0    20.35    21.70    20.5 14.3 26.5
+ TUBERCULOS, RAICES Y PLATANOS 243  21.2    19.85    22.48    18.4 12.8 29.1
+                    PROCESADOS 416  14.9    14.24    15.47    14.3  9.9 18.9
+                      PESCADOS 264  16.4    15.39    17.37    14.2  9.9 22.7
+                        CARNES 480  14.6    13.94    15.30    12.6  9.5 16.7
+             GRANOS Y CEREALES 228  11.7    10.93    12.41    10.7  7.7 13.3
+              LACTEOS Y HUEVOS 120  10.2     9.26    11.12     8.1  6.1 14.8
+  [tabla ] salidas/tablas/06_cv_por_grupo.csv
+  [figura] salidas/figuras/04_precio_por_grupo.png
+  [figura] salidas/figuras/05_cv_por_grupo.png
+
+==========================================================================
+C.2 BRECHA DE PRECIO POR TIPO DE PLAZA Y POR REGION
+==========================================================================
+                     tipo_plaza     n media mediana desv_est    q1   q3
+             Central de abastos 28581   1.8     0.0     23.6  -9.0  8.4
+        Plaza de mercado urbana 12970   4.5     1.5     21.2  -5.3 10.9
+ Mercado de municipio productor 10872  -1.0    -0.6     25.3 -13.2  9.3
+  Frigorífico o plaza de carnes  1619   7.4     0.0     22.7  -4.5 11.8
+  [tabla ] salidas/tablas/07_brecha_por_tipo_plaza.csv
+
+    region     n media mediana desv_est   q1   q3
+    Andina 29379   1.4     0.0     22.9 -8.7  9.4
+    Caribe  8906   2.7     0.0     24.7 -8.4  8.0
+  Pacífica 11917   0.4     0.0     21.0 -9.1  8.4
+ Orinoquía  2979   9.4     3.2     28.3 -5.7 17.3
+  Amazonía   861  13.0     5.7     32.0 -2.8 20.6
+  [tabla ] salidas/tablas/08_brecha_por_region.csv
+  [figura] salidas/figuras/06_brecha_plaza_region.png
+
+==========================================================================
+D. RELACION ENTRE NIVEL DE PRECIO Y DISPERSION GEOGRAFICA
+==========================================================================
+Correlacion de Pearson  log10(precio) vs CV : -0.345  (IC95%: -0.376 a -0.313; p = 4.09e-84)
+Correlacion de Spearman precio     vs CV : -0.379 
+
+                         grupo   n pearson_log spearman
+                        FRUTAS 679      -0.419   -0.442
+             GRANOS Y CEREALES 228      -0.331   -0.295
+                    PROCESADOS 416      -0.188   -0.245
+                        CARNES 480      -0.349   -0.163
+                      PESCADOS 264      -0.173   -0.160
+ TUBERCULOS, RAICES Y PLATANOS 243      -0.098   -0.068
+         VERDURAS Y HORTALIZAS 557      -0.029   -0.027
+              LACTEOS Y HUEVOS 120       0.630    0.528
+  [tabla ] salidas/tablas/09_correlaciones_nivel_dispersion.csv
+  [figura] salidas/figuras/07_nivel_vs_dispersion.png
+
+CV intermercado por cuartil de precio:
+         cuartil   n media mediana desv_est
+ Q1 (mas barato) 747  24.1    23.5     11.6
+              Q2 747  22.0    19.6     11.9
+              Q3 746  17.3    15.3     10.3
+   Q4 (mas caro) 747  13.7    12.0      6.9
+  [tabla ] salidas/tablas/10_cv_por_cuartil_precio.csv
+
+==========================================================================
+D.2 PRODUCTOS CON MAYOR Y MENOR DISPERSION GEOGRAFICA
+==========================================================================
+Productos con mayor dispersion:
+             producto                 grupo meses precio_mediano cv_mediano
+              Brócoli VERDURAS Y HORTALIZAS    12           3313       55.5
+          Rábano rojo VERDURAS Y HORTALIZAS    12           4946       52.5
+ Lechuga crespa verde VERDURAS Y HORTALIZAS    12           3542       51.9
+              Perejil VERDURAS Y HORTALIZAS    12           6023       48.9
+            Calabacín VERDURAS Y HORTALIZAS    12           1142       47.0
+             Coliflor VERDURAS Y HORTALIZAS    12           3544       46.0
+             Cilantro VERDURAS Y HORTALIZAS    12           4578       45.7
+             Espinaca VERDURAS Y HORTALIZAS    12           3998       44.7
+      Lechuga Batavia VERDURAS Y HORTALIZAS    12           2058       43.8
+                Cidra VERDURAS Y HORTALIZAS    11           1091       43.4
+                  Ajo VERDURAS Y HORTALIZAS    12           9511       42.2
+ Menudencias de pollo                CARNES    12           3849       41.3
+
+Productos con menor dispersion:
+                       producto                         grupo meses
+                Fríjol Zaragoza             GRANOS Y CEREALES    12
+                       Gelatina                    PROCESADOS    12
+   Carne de res molida, murillo                        CARNES    12
+       Fríjol cargamanto blanco             GRANOS Y CEREALES    12
+                   Huevo rojo A              LACTEOS Y HUEVOS    12
+ Carne de cerdo, cabeza de lomo                        CARNES    12
+                  Ajo importado         VERDURAS Y HORTALIZAS    12
+                   Huevo rojo B              LACTEOS Y HUEVOS    12
+                   Papa suprema TUBERCULOS, RAICES Y PLATANOS     6
+       Jugo instantáneo (sobre)                    PROCESADOS    12
+                  Queso Caquetá              LACTEOS Y HUEVOS    12
+                 Jugo de frutas                    PROCESADOS    12
+ precio_mediano cv_mediano
+           7932        6.2
+          41248        6.2
+          19751        6.0
+          10460        6.0
+            445        5.8
+          18892        5.5
+           9392        5.2
+            398        5.1
+           1753        5.0
+          37647        4.6
+          19208        4.0
+           8874        3.9
+  [tabla ] salidas/tablas/11_dispersion_por_producto.csv
+  [figura] salidas/figuras/08_productos_extremos.png
+
+==========================================================================
+E. EVOLUCION MENSUAL
+==========================================================================
+  [tabla ] salidas/tablas/12_serie_mensual_por_grupo.csv
+CV intermercado mediano por mes (%):
+    1     2     3     4     5     6     7     8     9    10    11    12 
+16.18 16.28 16.20 16.80 16.50 16.37 16.71 16.73 16.34 16.27 16.24 16.29 
+
+Variacion del indice de precio por grupo (dic-24 base ene-24 = 100):
+                         grupo indice
+                      PESCADOS  113.2
+         VERDURAS Y HORTALIZAS  111.3
+ TUBERCULOS, RAICES Y PLATANOS  110.5
+                        FRUTAS  108.3
+                    PROCESADOS  105.6
+                        CARNES  103.5
+              LACTEOS Y HUEVOS   99.6
+             GRANOS Y CEREALES   99.1
+  [figura] salidas/figuras/09_evolucion_mensual.png
+
+==========================================================================
+F. SINTESIS: CONTRASTES PRELIMINARES
+==========================================================================
+Kruskal-Wallis  CV ~ grupo alimentario: H = 818.8 | gl = 7 | p = <2e-16 
+ANOVA de un factor CV ~ grupo         : F = 180.1 | p = <2e-16 | eta2 = 0.297 
+Kruskal-Wallis  brecha ~ tipo de plaza: H = 549.6 | gl = 3 | p = <2e-16 
+
+IC 95% para el CV intermercado medio (todos los productos-mes):
+inferior    media superior        n 
+  18.853   19.252   19.652 2987.000 
+
+AED finalizado. Figuras en salidas/figuras y tablas en salidas/tablas 

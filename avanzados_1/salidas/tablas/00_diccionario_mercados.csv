@@ -1,0 +1,81 @@
+"mercado";"ciudad";"departamento";"region";"plaza";"tipo_plaza";"es_capital"
+"Ancuya (Nariño)";"Ancuya";"Nariño";"Pacífica";NA;"Mercado de municipio productor";FALSE
+"Arauca (Arauca)";"Arauca";"Arauca";"Orinoquía";NA;"Plaza de mercado urbana";TRUE
+"Armenia, Mercar";"Armenia";"Quindío";"Andina";"Mercar";"Central de abastos";TRUE
+"Armenia, Retiro";"Armenia";"Quindío";"Andina";"Retiro";"Plaza de mercado urbana";TRUE
+"Barranquilla, Barranquillita";"Barranquilla";"Atlántico";"Caribe";"Barranquillita";"Central de abastos";TRUE
+"Barranquilla, Granabastos";"Barranquilla";"Atlántico";"Caribe";"Granabastos";"Central de abastos";TRUE
+"Bogotá, D.C., Carnes barrio María Paz";"Bogotá, D.C.";"Bogotá, D.C.";"Andina";"Carnes barrio María Paz";"Frigorífico o plaza de carnes";TRUE
+"Bogotá, D.C., Corabastos";"Bogotá, D.C.";"Bogotá, D.C.";"Andina";"Corabastos";"Central de abastos";TRUE
+"Bogotá, D.C., Frigorífico Ble Ltda.";"Bogotá, D.C.";"Bogotá, D.C.";"Andina";"Frigorífico Ble Ltda.";"Frigorífico o plaza de carnes";TRUE
+"Bogotá, D.C., Frigorífico Guadalupe";"Bogotá, D.C.";"Bogotá, D.C.";"Andina";"Frigorífico Guadalupe";"Frigorífico o plaza de carnes";TRUE
+"Bogotá, D.C., Paloquemao";"Bogotá, D.C.";"Bogotá, D.C.";"Andina";"Paloquemao";"Plaza de mercado urbana";TRUE
+"Bogotá, D.C., Plaza España";"Bogotá, D.C.";"Bogotá, D.C.";"Andina";"Plaza España";"Plaza de mercado urbana";TRUE
+"Bogotá, D.C., Plaza Las Flores";"Bogotá, D.C.";"Bogotá, D.C.";"Andina";"Plaza Las Flores";"Plaza de mercado urbana";TRUE
+"Bucaramanga, Centroabastos";"Bucaramanga";"Santander";"Andina";"Centroabastos";"Central de abastos";TRUE
+"Bucaramanga, Frigoríficos";"Bucaramanga";"Santander";"Andina";"Frigoríficos";"Frigorífico o plaza de carnes";TRUE
+"Bucaramanga, Mercados del centro";"Bucaramanga";"Santander";"Andina";"Mercados del centro";"Plaza de mercado urbana";TRUE
+"Buenaventura (Valle del Cauca)";"Buenaventura";"Valle del Cauca";"Pacífica";NA;"Mercado de municipio productor";FALSE
+"Cali, Cavasa";"Cali";"Valle del Cauca";"Pacífica";"Cavasa";"Central de abastos";TRUE
+"Cali, Galería Alameda";"Cali";"Valle del Cauca";"Pacífica";"Galería Alameda";"Plaza de mercado urbana";TRUE
+"Cali, La Floresta";"Cali";"Valle del Cauca";"Pacífica";"La Floresta";"Plaza de mercado urbana";TRUE
+"Cali, Santa Elena";"Cali";"Valle del Cauca";"Pacífica";"Santa Elena";"Central de abastos";TRUE
+"Cali, Siloé";"Cali";"Valle del Cauca";"Pacífica";"Siloé";"Plaza de mercado urbana";TRUE
+"Caparrapí (Cundinamarca)";"Caparrapí";"Cundinamarca";"Andina";NA;"Mercado de municipio productor";FALSE
+"Cartagena, Bazurto";"Cartagena";"Bolívar";"Caribe";"Bazurto";"Central de abastos";TRUE
+"Cartago (Valle del Cauca)";"Cartago";"Valle del Cauca";"Pacífica";NA;"Mercado de municipio productor";FALSE
+"Charalá (Santander)";"Charalá";"Santander";"Andina";NA;"Mercado de municipio productor";FALSE
+"Chiquinquirá (Boyacá)";"Chiquinquirá";"Boyacá";"Andina";NA;"Mercado de municipio productor";FALSE
+"Consacá (Nariño)";"Consacá";"Nariño";"Pacífica";NA;"Mercado de municipio productor";FALSE
+"Cúcuta, Cenabastos";"Cúcuta";"Norte de Santander";"Andina";"Cenabastos";"Central de abastos";TRUE
+"Cúcuta, La Nueva Sexta";"Cúcuta";"Norte de Santander";"Andina";"La Nueva Sexta";"Plaza de mercado urbana";TRUE
+"Duitama (Boyacá), Mercaplaza";"Duitama";"Boyacá";"Andina";"Mercaplaza";"Central de abastos";FALSE
+"El Carmen de Viboral (Antioquia)";"El Carmen de Viboral";"Antioquia";"Andina";NA;"Mercado de municipio productor";FALSE
+"El Santuario (Antioquia)";"El Santuario";"Antioquia";"Andina";NA;"Mercado de municipio productor";FALSE
+"Florencia (Caquetá)";"Florencia";"Caquetá";"Amazonía";NA;"Plaza de mercado urbana";TRUE
+"Güepsa (Santander)";"Güepsa";"Santander";"Andina";NA;"Mercado de municipio productor";FALSE
+"Ibagué, Plaza La 21";"Ibagué";"Tolima";"Andina";"Plaza La 21";"Central de abastos";TRUE
+"Ipiales (Nariño), Centro de acopio";"Ipiales";"Nariño";"Pacífica";"Centro de acopio";"Central de abastos";FALSE
+"Ipiales (Nariño), Ipiales somos todos";"Ipiales";"Nariño";"Pacífica";"Ipiales somos todos";"Mercado de municipio productor";FALSE
+"La Ceja (Antioquia)";"La Ceja";"Antioquia";"Andina";NA;"Mercado de municipio productor";FALSE
+"La Unión (Antioquia)";"La Unión";"Antioquia";"Andina";NA;"Mercado de municipio productor";FALSE
+"La Unión (Nariño)";"La Unión";"Nariño";"Pacífica";NA;"Mercado de municipio productor";FALSE
+"Malambo (Atlántico), Carnes y carnes";"Malambo";"Atlántico";"Caribe";"Carnes y carnes";"Frigorífico o plaza de carnes";FALSE
+"Manizales, Centro Galerías";"Manizales";"Caldas";"Andina";"Centro Galerías";"Plaza de mercado urbana";TRUE
+"Marinilla (Antioquia)";"Marinilla";"Antioquia";"Andina";NA;"Mercado de municipio productor";FALSE
+"Medellín, Central Mayorista de Antioquia";"Medellín";"Antioquia";"Andina";"Central Mayorista de Antioquia";"Central de abastos";TRUE
+"Medellín, Plaza Minorista ""José María Villa""";"Medellín";"Antioquia";"Andina";"Plaza Minorista ""José María Villa""";"Plaza de mercado urbana";TRUE
+"Moniquirá (Boyacá)";"Moniquirá";"Boyacá";"Andina";NA;"Mercado de municipio productor";FALSE
+"Montería, Mercado del Sur";"Montería";"Córdoba";"Caribe";"Mercado del Sur";"Central de abastos";TRUE
+"Neiva, Surabastos";"Neiva";"Huila";"Andina";"Surabastos";"Central de abastos";TRUE
+"Nocaima (Cundinamarca)";"Nocaima";"Cundinamarca";"Andina";NA;"Mercado de municipio productor";FALSE
+"Palmira (Valle del Cauca)";"Palmira";"Valle del Cauca";"Pacífica";NA;"Mercado de municipio productor";FALSE
+"Pamplona (Norte de Santander)";"Pamplona";"Norte de Santander";"Andina";NA;"Mercado de municipio productor";FALSE
+"Pasto, El Potrerillo";"Pasto";"Nariño";"Pacífica";"El Potrerillo";"Central de abastos";TRUE
+"Peñol (Antioquia)";"Peñol";"Antioquia";"Andina";NA;"Mercado de municipio productor";FALSE
+"Pereira, La 41";"Pereira";"Risaralda";"Andina";"La 41";"Plaza de mercado urbana";TRUE
+"Pereira, Mercasa";"Pereira";"Risaralda";"Andina";"Mercasa";"Central de abastos";TRUE
+"Popayán, Plaza de mercado del barrio Bolívar";"Popayán";"Cauca";"Pacífica";"Plaza de mercado del barrio Bolívar";"Plaza de mercado urbana";TRUE
+"Rionegro (Antioquia)";"Rionegro";"Antioquia";"Andina";NA;"Mercado de municipio productor";FALSE
+"San Gil (Santander)";"San Gil";"Santander";"Andina";NA;"Mercado de municipio productor";FALSE
+"San Gil (Santander), panela";"San Gil";"Santander";"Andina";"panela";"Mercado de municipio productor";FALSE
+"San Sebastián de Mariquita (Tolima)";"San Sebastián de Mariquita";"Tolima";"Andina";NA;"Mercado de municipio productor";FALSE
+"San Vicente Ferrer (Antioquia)";"San Vicente Ferrer";"Antioquia";"Andina";NA;"Mercado de municipio productor";FALSE
+"Sandoná (Nariño)";"Sandoná";"Nariño";"Pacífica";NA;"Mercado de municipio productor";FALSE
+"Santa Bárbara (Antioquia)";"Santa Bárbara";"Antioquia";"Andina";NA;"Mercado de municipio productor";FALSE
+"Santa Marta (Magdalena)";"Santa Marta";"Magdalena";"Caribe";NA;"Plaza de mercado urbana";TRUE
+"Santana (Boyacá)";"Santana";"Boyacá";"Andina";NA;"Mercado de municipio productor";FALSE
+"Sincelejo, Nuevo Mercado";"Sincelejo";"Sucre";"Caribe";"Nuevo Mercado";"Central de abastos";TRUE
+"Socorro (Santander)";"Socorro";"Santander";"Andina";NA;"Mercado de municipio productor";FALSE
+"Sonsón (Antioquia)";"Sonsón";"Antioquia";"Andina";NA;"Mercado de municipio productor";FALSE
+"Tibasosa (Boyacá), Coomproriente";"Tibasosa";"Boyacá";"Andina";"Coomproriente";"Central de abastos";FALSE
+"Tuluá (Valle del Cauca)";"Tuluá";"Valle del Cauca";"Pacífica";NA;"Mercado de municipio productor";FALSE
+"Tunja, Complejo de Servicios del Sur";"Tunja";"Boyacá";"Andina";"Complejo de Servicios del Sur";"Central de abastos";TRUE
+"Túquerres (Nariño)";"Túquerres";"Nariño";"Pacífica";NA;"Mercado de municipio productor";FALSE
+"Valledupar, Mercabastos";"Valledupar";"Cesar";"Caribe";"Mercabastos";"Central de abastos";TRUE
+"Valledupar, Mercado Nuevo";"Valledupar";"Cesar";"Caribe";"Mercado Nuevo";"Central de abastos";TRUE
+"Vélez (Santander)";"Vélez";"Santander";"Andina";NA;"Mercado de municipio productor";FALSE
+"Villavicencio, CAV";"Villavicencio";"Meta";"Orinoquía";"CAV";"Central de abastos";TRUE
+"Villeta (Cundinamarca)";"Villeta";"Cundinamarca";"Andina";NA;"Mercado de municipio productor";FALSE
+"Yolombó (Antioquia)";"Yolombó";"Antioquia";"Andina";NA;"Mercado de municipio productor";FALSE
+"Yopal (Casanare)";"Yopal";"Casanare";"Orinoquía";NA;"Plaza de mercado urbana";TRUE

@@ -1,0 +1,992 @@
+---
+title: "Regresión por mínimos cuadrados: dos laboratorios reproducibles"
+subtitle: "Métodos Estadísticos Avanzados II · Sesión 2"
+author: "Material docente complementario"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    theme: flatly
+    highlight: tango
+---
+
+```{r configuracion, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 8, fig.height = 5, fig.align = "center")
+options(digits = 4, width = 90,
+        contrasts = c("contr.treatment", "contr.poly"))
+set.seed(2026)
+fmt <- function(x, decimales = 3) {
+  formatC(as.numeric(x), format = "f", digits = decimales)
+}
+fmt_p <- function(x) format.pval(x, digits = 3, eps = 1e-12)
+```
+
+<style>
+.solucion {
+  margin: 1.0em 0 1.35em 0;
+  padding: 0.9em 1.15em;
+  background: #f0f7f6;
+  border-left: 5px solid #147f84;
+  border-radius: 0 9px 9px 0;
+  line-height: 1.62;
+}
+.solucion strong:first-child {color: #0b5962;}
+.nota-docente {
+  margin: 1em 0;
+  padding: 0.85em 1.1em;
+  background: #fff5e9;
+  border-left: 5px solid #d98b45;
+  border-radius: 0 9px 9px 0;
+}
+</style>
+
+> **Propósito.** Reconstruir la lógica de la regresión por mínimos cuadrados (LS)
+> en dos situaciones distintas: regresión lineal simple y regresión múltiple.
+> Los datos están distribuidos en paquetes oficiales de R; **no hay que descargar
+> archivos CSV ni crear los datos manualmente**.
+
+**Versión docente con soluciones.** Este archivo incorpora respuestas razonadas
+a las preguntas y actividades, cálculos reproducibles y una explicación extensa
+del uso de predictores categóricos e interacciones. Los números que aparecen en
+las respuestas se actualizan automáticamente al pulsar **Knit** en RStudio.
+
+## 0. Preparación
+
+1. Abrir este archivo en RStudio.
+2. Instalar una sola vez los paquetes que hagan falta. No ejecutar
+   `install.packages()` en cada compilación.
+3. Pulsar **Knit** para producir un informe HTML con texto, resultados y gráficos.
+
+```{r comprobar-paquetes}
+obligatorios <- c("MASS", "AER", "knitr", "rmarkdown")
+faltantes <- obligatorios[!vapply(obligatorios, requireNamespace,
+                                  quietly = TRUE, FUN.VALUE = logical(1))]
+if (length(faltantes)) {
+  stop("Instale una sola vez en la consola de R: install.packages(c(",
+       paste(sprintf("'%s'", faltantes), collapse = ", "), "))")
+}
+```
+
+Los diagnósticos ampliados utilizan opcionalmente los paquetes `car`, `lmtest`
+y `sandwich`; si no están instalados, la práctica principal sigue compilando.
+
+# Parte A. Regresión lineal simple: peso de gatos
+
+El conjunto `MASS::cats` contiene mediciones del peso corporal (`Bwt`, kg),
+el peso del corazón (`Hwt`, g) y el sexo (`Sex`) de gatos adultos. La pregunta
+es si una función lineal de `Bwt` permite explicar parte de la variación de
+`Hwt`. **Asociación no equivale a causalidad.**
+
+## 1. Cargar y conocer los datos
+
+```{r gatos-datos}
+data("cats", package = "MASS")
+str(cats)
+summary(cats)
+colSums(is.na(cats))
+nrow(cats)
+```
+
+**Antes de ajustar:** ¿qué unidades tienen las dos variables? ¿Hay datos
+faltantes? ¿Es razonable aproximar visualmente la relación por una recta?
+
+```{r gatos-dispersion}
+plot(Hwt ~ Bwt, data = cats, pch = 19, col = "#CB7A4F",
+     xlab = "Peso corporal (kg)", ylab = "Peso del corazón (g)",
+     main = "Gatos adultos: asociación entre dos magnitudes")
+grid(col = "#E7EBE9")
+```
+
+::: {.solucion}
+**Respuesta razonada · Exploración inicial.** `Bwt` se mide en **kilogramos**
+y `Hwt` en **gramos**. La base tiene `r nrow(cats)` observaciones; el número
+total de valores faltantes es `r sum(is.na(cats))`. El peso corporal toma
+valores entre `r fmt(min(cats$Bwt), 1)` y `r fmt(max(cats$Bwt), 1)` kg. En el
+diagrama aparece una tendencia **positiva aproximadamente lineal**, aunque
+con dispersión; por eso una recta es un primer modelo defendible, no una
+descripción exacta de todos los individuos. Los puntos alejados deben
+examinarse con residuos e influencia antes de descartarlos.
+:::
+
+## 2. Definir el criterio LS
+
+El modelo es
+
+\[
+Hwt_i = \beta_0 + \beta_1 Bwt_i + \varepsilon_i,
+\qquad
+\operatorname{SSE}(\beta_0,\beta_1)
+= \sum_{i=1}^{n}(Hwt_i-\beta_0-\beta_1 Bwt_i)^2.
+\]
+
+El método LS minimiza la suma de cuadrados de los residuos verticales.
+
+```{r gatos-ajuste}
+m_simple <- lm(Hwt ~ Bwt, data = cats)
+summary(m_simple)
+coef(m_simple)
+confint(m_simple)
+anova(m_simple)
+```
+
+```{r gatos-recta}
+plot(Hwt ~ Bwt, data = cats, pch = 19, col = "#CB7A4F",
+     xlab = "Peso corporal (kg)", ylab = "Peso del corazón (g)",
+     main = "Ajuste por mínimos cuadrados")
+abline(m_simple, col = "#137F87", lwd = 3)
+grid(col = "#E7EBE9")
+legend("topleft", "Recta LS", col = "#137F87", lwd = 3, bty = "n")
+```
+
+**Para interpretar:** ¿cuántos gramos cambia en promedio el peso cardíaco
+estimado por cada kilogramo adicional de peso corporal? ¿Qué representa
+el intercepto? ¿Tiene interpretación práctica si el peso corporal es cero?
+
+::: {.solucion}
+**Respuesta razonada · Ecuación estimada e interpretación.** El ajuste arroja
+
+\[
+\widehat{Hwt}=
+`r fmt(coef(m_simple)[["(Intercept)"]])`
+\; + \;
+`r fmt(coef(m_simple)[["Bwt"]])`\,Bwt.
+\]
+
+La pendiente `r fmt(coef(m_simple)[["Bwt"]])` tiene unidades de
+**gramos de corazón por kilogramo corporal**: por cada kilogramo adicional,
+el modelo predice una diferencia de `r fmt(coef(m_simple)[["Bwt"]])` gramos
+en el peso cardíaco *medio*, no en el de todos los gatos. El intercepto
+`r fmt(coef(m_simple)[["(Intercept)"]])` g es la predicción matemática en
+`Bwt = 0`. No tiene una interpretación biológica razonable: cero está fuera
+del rango observado y no describe un gato adulto. Tampoco puede deducirse
+que aumentar deliberadamente el peso cause ese incremento cardíaco.
+:::
+
+## 3. Ecuaciones normales y algoritmo `lm()`
+
+\[
+\widehat{\boldsymbol\beta}=(X^{\mathsf T}X)^{-1}X^{\mathsf T}y,
+\qquad X^{\mathsf T}\widehat\varepsilon=0.
+\]
+
+```{r gatos-matriz}
+X_simple <- model.matrix(m_simple)
+y_simple <- cats$Hwt
+b_normales <- solve(crossprod(X_simple), crossprod(X_simple, y_simple))
+comparacion <- cbind(ecuaciones_normales = as.vector(b_normales),
+                     lm = unname(coef(m_simple)))
+rownames(comparacion) <- colnames(X_simple)
+comparacion
+crossprod(X_simple, resid(m_simple))
+```
+
+**Nota numérica:** se exhibe la fórmula de las ecuaciones normales por su
+valor didáctico. Para ajustes reales, `lm()` utiliza métodos basados en la
+factorización QR, generalmente más estables que formar la inversa.
+
+::: {.solucion}
+**Actividad resuelta · Verificación matricial.** Ambas columnas de
+`comparacion` coinciden salvo errores de redondeo: están calculando el
+mismo minimizador de la suma de cuadrados. El vector
+\(X^{\mathsf T}\widehat\varepsilon\) es numéricamente próximo a cero, lo
+que confirma que los residuos LS son ortogonales a las columnas de la matriz
+de diseño (incluida la constante). Esta propiedad es algebraica y **no**
+demuestra normalidad, independencia o varianza constante de los errores.
+:::
+
+## 4. Medidas de ajuste e inferencia
+
+```{r gatos-medidas}
+c(R2 = summary(m_simple)$r.squared,
+  R2_ajustado = summary(m_simple)$adj.r.squared,
+  error_residual = sigma(m_simple),
+  SSE = sum(resid(m_simple)^2),
+  grados_libertad = df.residual(m_simple))
+```
+
+Identifique en `summary()` la estimación de la pendiente, su error estándar,
+el estadístico t y su valor p. Distinga **significación estadística** de
+**importancia práctica**.
+
+::: {.solucion}
+**Respuesta razonada · Calidad de ajuste e inferencia.** La pendiente es
+`r fmt(coef(summary(m_simple))["Bwt", "Estimate"])`, su error estándar es
+`r fmt(coef(summary(m_simple))["Bwt", "Std. Error"])`, el estadístico
+\(t\) es `r fmt(coef(summary(m_simple))["Bwt", "t value"])` y el valor
+\(p\) bilateral es
+`r fmt_p(coef(summary(m_simple))["Bwt", "Pr(>|t|)"])`.
+El coeficiente de determinación es \(R^2=`r fmt(summary(m_simple)$r.squared)`\),
+por lo que el ajuste explica aproximadamente
+`r fmt(100 * summary(m_simple)$r.squared, 1)` % de la variación *muestral*
+de `Hwt` en torno a su media. Un valor \(p\) pequeño indica evidencia
+estadística contra \(H_0:\beta_1=0\), **condicionada a los supuestos del
+modelo**; la relevancia práctica exige valorar el tamaño de la pendiente,
+sus unidades, la incertidumbre y el contexto biológico.
+:::
+
+## 5. Diagnósticos imprescindibles
+
+```{r gatos-diagnosticos, fig.width=9, fig.height=7}
+par(mfrow = c(2, 2))
+plot(m_simple)
+par(mfrow = c(1, 1))
+```
+
+```{r gatos-influencia}
+influencia_gatos <- sort(cooks.distance(m_simple), decreasing = TRUE)
+head(influencia_gatos, 5)
+```
+
+Discuta: linealidad, varianza aproximadamente constante, normalidad
+de errores para inferencia clásica y observaciones potencialmente influyentes.
+La independencia depende del mecanismo de muestreo, no se deduce de un gráfico.
+
+```{r gatos-diagnosticos-cifras}
+umbral_cook <- 4 / nobs(m_simple)
+marcados_cook <- which(cooks.distance(m_simple) > umbral_cook)
+data.frame(
+  medida = c("Umbral orientativo 4/n", "Número de casos que lo superan",
+             "Máxima distancia de Cook"),
+  valor = c(umbral_cook, length(marcados_cook),
+            max(cooks.distance(m_simple)))
+)
+```
+
+::: {.solucion}
+**Respuesta razonada · Lectura de las cuatro gráficas.**
+
+1. **Residuos frente a ajustados:** esperamos una nube sin curvatura sistemática;
+   una forma curva pone en duda la especificación lineal.
+2. **Escala–localización:** esperamos una dispersión relativamente uniforme;
+   una forma de embudo sugiere heterocedasticidad.
+3. **Gráfico Q–Q:** desviaciones importantes de la recta sugieren que la
+   aproximación normal de los residuos puede ser problemática para ciertas
+   pruebas o intervalos, especialmente en muestras pequeñas.
+4. **Residuos frente a apalancamiento:** ayuda a localizar observaciones que
+   podrían modificar apreciablemente los coeficientes.
+
+Con el criterio **orientativo**, no automático, \(D_i>4/n\), se señalan
+`r length(marcados_cook)` casos de `r nobs(m_simple)`; deben comprobarse,
+pero no eliminarse sin motivo sustantivo. Ninguna gráfica acredita la
+**independencia**: esta depende de cómo fueron seleccionados y medidos los
+gatos. Los diagnósticos informan sobre la **plausibilidad** de supuestos, no
+constituyen una demostración formal de que se cumplan.
+:::
+
+## 6. Predicción y extensión
+
+```{r gatos-prediccion}
+nuevo_gato <- data.frame(Bwt = 3.2)
+ic_gato <- predict(m_simple, newdata = nuevo_gato,
+                   interval = "confidence", level = 0.95)
+ip_gato <- predict(m_simple, newdata = nuevo_gato,
+                   interval = "prediction", level = 0.95)
+rbind(IC_media = ic_gato[1, ], IP_individual = ip_gato[1, ])
+```
+
+¿Por qué el intervalo para un individuo nuevo es más ancho que el intervalo
+para la media condicional? Evite extrapolar fuera del intervalo observado.
+
+::: {.solucion}
+**Respuesta razonada · Dos incertidumbres diferentes.** Para un peso corporal
+de 3.2 kg, la predicción puntual es `r fmt(ic_gato[1, "fit"])` g. El intervalo
+del 95 % para **la media condicional** es
+[`r fmt(ic_gato[1, "lwr"])`, `r fmt(ic_gato[1, "upr"])`] g, mientras que
+el intervalo del 95 % para **un nuevo individuo** es
+[`r fmt(ip_gato[1, "lwr"])`, `r fmt(ip_gato[1, "upr"])`] g.
+El segundo incorpora tanto la incertidumbre al estimar la recta como la
+variación individual alrededor de ella; por eso es más ancho. Se trata de
+intervalos clásicos bajo los supuestos correspondientes, no de garantías
+absolutas ni de una extrapolación válida a pesos no observados.
+:::
+
+## 6.1. Una variable explicativa categórica: el sexo del gato
+
+Hasta aquí se ha supuesto que **todos los gatos comparten una misma recta**,
+independientemente de su sexo. Pero `Sex` es un *factor* con dos categorías.
+La regresión lineal puede incorporar categorías mediante **variables
+indicadoras** (*dummy variables*). No se asigna un orden cuantitativo al sexo:
+se usa 0/1 para expresar diferencias respecto de una categoría de referencia.
+
+```{r gatos-sexo-codificacion}
+class(cats$Sex)
+levels(cats$Sex)
+table(cats$Sex)
+contrasts(cats$Sex)
+head(model.matrix(~ Bwt + Sex, data = cats), 8)
+tapply(cats$Bwt, cats$Sex, range)
+```
+
+::: {.solucion}
+**Respuesta razonada · ¿Qué codificó R?** Con los contrastes de tratamiento
+habituales de R, la categoría de referencia es **F (hembra)** y la columna
+`SexM` vale **0 para F** y **1 para M (macho)**. La columna no representa
+"cuánto sexo" tiene un animal: es una variable indicadora que permite
+comparar **dos grupos a un mismo peso corporal**. La tabla de frecuencias
+permite valorar el tamaño de cada grupo; el rango de `Bwt` por sexo permite
+comprobar que la comparación a 3.2 kg se hace en una zona observada.
+:::
+
+### Modelo A: solo peso corporal
+
+\[
+\widehat{Hwt}=\hat\beta_0+\hat\beta_1 Bwt.
+\]
+
+Una sola pendiente y un solo intercepto para todos los individuos.
+
+### Modelo B: peso corporal + sexo, sin interacción
+
+\[
+\widehat{Hwt}=\hat\beta_0+\hat\beta_1 Bwt
+             +\hat\beta_2\,\underbrace{\mathbf{1}\{Sex=M\}}_{SexM}.
+\]
+
+Al separar las categorías, el modelo equivale a **dos rectas paralelas**:
+
+\[
+\begin{aligned}
+\text{Hembras:}\quad &\widehat{Hwt}_F=\hat\beta_0+\hat\beta_1 Bwt,\\
+\text{Machos:}\quad &\widehat{Hwt}_M=(\hat\beta_0+\hat\beta_2)
+                                    +\hat\beta_1 Bwt.
+\end{aligned}
+\]
+
+Aquí \(\hat\beta_2\) es la **diferencia estimada M − F**, en gramos,
+**manteniendo fijo el peso corporal**. La pendiente del peso es común a
+ambos sexos. No es la diferencia de los promedios brutos de `Hwt`, porque esos
+promedios también pueden reflejar diferencias en `Bwt` entre grupos.
+
+### Modelo C: peso corporal × sexo, con interacción
+
+\[
+\widehat{Hwt}=\hat\beta_0+\hat\beta_1Bwt
++\hat\beta_2\mathbf{1}\{Sex=M\}
++\hat\beta_3Bwt\,\mathbf{1}\{Sex=M\}.
+\]
+
+La interacción permite que las rectas tengan **pendientes diferentes**:
+
+\[
+\begin{aligned}
+\text{Hembras:}\quad &\widehat{Hwt}_F=\hat\beta_0+\hat\beta_1Bwt,\\
+\text{Machos:}\quad &\widehat{Hwt}_M=(\hat\beta_0+\hat\beta_2)
+                              +(\hat\beta_1+\hat\beta_3)Bwt.
+\end{aligned}
+\]
+
+La interacción `Bwt:SexM` estima la diferencia **pendiente de machos −
+pendiente de hembras**, en gramos por kilogramo. Cuando hay interacción,
+`SexM` aislado es la diferencia entre sexos **en `Bwt = 0`**: no es una
+comparación biológicamente relevante. A un peso válido \(b\), la diferencia
+predicha es \(\hat\beta_2+b\hat\beta_3\).
+
+```{r gatos-extension}
+m_con_sexo <- lm(Hwt ~ Bwt + Sex, data = cats)
+m_interaccion <- lm(Hwt ~ Bwt * Sex, data = cats)
+
+summary(m_con_sexo)
+summary(m_interaccion)
+head(model.matrix(m_interaccion), 8)
+comparacion_gatos <- anova(m_simple, m_con_sexo, m_interaccion)
+comparacion_gatos
+
+tabla_gatos <- data.frame(
+  modelo = c("Solo Bwt", "Bwt + Sex", "Bwt * Sex"),
+  R2 = vapply(list(m_simple, m_con_sexo, m_interaccion),
+               function(m) summary(m)$r.squared, numeric(1)),
+  R2_ajustado = vapply(list(m_simple, m_con_sexo, m_interaccion),
+                        function(m) summary(m)$adj.r.squared, numeric(1)),
+  AIC = AIC(m_simple, m_con_sexo, m_interaccion)$AIC
+)
+tabla_gatos
+```
+
+::: {.solucion}
+**Actividad resuelta · Coeficientes y modelos anidados.**
+
+- **Modelo aditivo:** la pendiente común para `Bwt` es
+  `r fmt(coef(m_con_sexo)[["Bwt"]])` g/kg; el coeficiente `SexM` es
+  `r fmt(coef(m_con_sexo)[["SexM"]])` g. Por tanto, al comparar un macho
+  y una hembra **con el mismo `Bwt`**, el valor predicho para el macho
+  difiere en `r fmt(coef(m_con_sexo)[["SexM"]])` g. Esta es una
+  **asociación condicional**, no una diferencia causada por el sexo.
+- **Modelo con interacción:** la pendiente para las hembras es
+  `r fmt(coef(m_interaccion)[["Bwt"]])` g/kg, y para los machos es
+  `r fmt(coef(m_interaccion)[["Bwt"]] + coef(m_interaccion)[["Bwt:SexM"]])`
+  g/kg. La diferencia entre pendientes se estima en
+  `r fmt(coef(m_interaccion)[["Bwt:SexM"]])` g/kg.
+- **Comparación formal:** en `anova(m_simple, m_con_sexo, m_interaccion)`,
+  la segunda fila pregunta si **agregar `Sex`** mejora el modelo solo con
+  peso (\(p=`r fmt_p(comparacion_gatos[2, "Pr(>F)"])`\)); la tercera
+  pregunta si **agregar la interacción** mejora el modelo aditivo
+  (\(p=`r fmt_p(comparacion_gatos[3, "Pr(>F)"])`\)). Son contrastes F
+  secuenciales de modelos anidados. También conviene valorar tamaño del
+  efecto, parsimonia, diagnósticos y desempeño predictivo.
+:::
+
+## 6.2. Dos gráficos: rectas paralelas frente a pendientes distintas
+
+```{r gatos-sexo-graficos, fig.width=11, fig.height=5.1}
+colores_sexo <- c(F = "#d97a55", M = "#147f84")
+simbolos_sexo <- c(F = 16, M = 17)
+op <- par(mfrow = c(1, 2), mar = c(4.5, 4.5, 3.4, 1))
+for (modelo in c("aditivo", "interaccion")) {
+  m_actual <- if (modelo == "aditivo") m_con_sexo else m_interaccion
+  plot(cats$Bwt, cats$Hwt, col = colores_sexo[as.character(cats$Sex)],
+       pch = simbolos_sexo[as.character(cats$Sex)], cex = 0.9,
+       xlab = "Peso corporal, Bwt (kg)", ylab = "Peso cardíaco, Hwt (g)",
+       main = if (modelo == "aditivo") "Bwt + Sex: rectas paralelas"
+              else "Bwt * Sex: pendientes diferentes")
+  grid(col = "#e4e9ea")
+  for (nivel in levels(cats$Sex)) {
+    rango <- range(cats$Bwt[cats$Sex == nivel])
+    xs <- seq(rango[1], rango[2], length.out = 100)
+    nuevo <- data.frame(Bwt = xs,
+                        Sex = factor(rep(nivel, length(xs)),
+                                     levels = levels(cats$Sex)))
+    lines(xs, predict(m_actual, newdata = nuevo),
+          col = colores_sexo[nivel], lwd = 3)
+  }
+  legend("topleft", legend = c("Hembras (F)", "Machos (M)"),
+         col = colores_sexo, pch = simbolos_sexo,
+         lty = 1, lwd = 2, bty = "n", cex = 0.83)
+}
+par(op)
+```
+
+::: {.solucion}
+**Respuesta razonada · Lectura visual.** Las líneas del **modelo aditivo**
+mantienen la misma inclinación: para cualquier valor fijo del peso, la
+distancia vertical entre ellas es constante e igual al coeficiente `SexM`.
+En el **modelo con interacción**, la separación vertical puede aumentar,
+disminuir o cambiar de signo según el peso; su cambio por cada kilogramo
+es el coeficiente `Bwt:SexM`. Los segmentos de las rectas se trazaron dentro
+del rango de pesos observado en cada sexo para evitar extrapolaciones
+visuales innecesarias.
+:::
+
+## 6.3. Comparación justa: misma masa corporal, distinto sexo
+
+```{r gatos-sexo-predicciones}
+gatos_32 <- data.frame(
+  Bwt = c(3.2, 3.2),
+  Sex = factor(c("F", "M"), levels = levels(cats$Sex))
+)
+tabla_32 <- data.frame(
+  sexo = gatos_32$Sex,
+  Bwt_kg = gatos_32$Bwt,
+  modelo_aditivo_g = as.vector(predict(m_con_sexo, newdata = gatos_32)),
+  modelo_interaccion_g = as.vector(predict(m_interaccion, newdata = gatos_32))
+)
+tabla_32
+
+# Verificación: predicción macho - predicción hembra en cada modelo.
+dif_aditiva <- diff(tabla_32$modelo_aditivo_g)
+dif_interaccion <- diff(tabla_32$modelo_interaccion_g)
+c(diferencia_aditiva_g = dif_aditiva,
+  diferencia_interaccion_g = dif_interaccion)
+```
+
+::: {.solucion}
+**Actividad resuelta · ¿Cómo se interpreta la categoría?** A 3.2 kg, el
+modelo aditivo predice `r fmt(tabla_32$modelo_aditivo_g[1])` g para F y
+`r fmt(tabla_32$modelo_aditivo_g[2])` g para M: una diferencia **M − F** de
+`r fmt(dif_aditiva)` g, igual a `SexM`. El modelo con interacción predice
+`r fmt(tabla_32$modelo_interaccion_g[1])` g para F y
+`r fmt(tabla_32$modelo_interaccion_g[2])` g para M: una diferencia de
+`r fmt(dif_interaccion)` g. En este segundo caso **no** debe usarse solo
+`SexM`; se calcula \(\hat\beta_2+3.2\hat\beta_3\).
+:::
+
+## 6.4. Centrar el peso: interpretar bien el intercepto de la interacción
+
+```{r gatos-sexo-centrado}
+cats$Bwt_c <- cats$Bwt - 3.2
+m_interaccion_c <- lm(Hwt ~ Bwt_c * Sex, data = cats)
+coef(m_interaccion_c)
+
+stopifnot(isTRUE(all.equal(
+  unname(coef(m_interaccion_c)[["SexM"]]),
+  unname(dif_interaccion))))
+stopifnot(isTRUE(all.equal(
+  unname(fitted(m_interaccion_c)),
+  unname(fitted(m_interaccion)))))
+```
+
+::: {.solucion}
+**Respuesta razonada · ¿Por qué centrar?** Como `Bwt_c = Bwt − 3.2`, el
+intercepto es ahora la predicción para **una hembra de 3.2 kg**, no para
+un animal de 0 kg. El coeficiente `SexM` del modelo centrado vale
+`r fmt(coef(m_interaccion_c)[["SexM"]])` g y representa directamente la
+diferencia M − F **a 3.2 kg**. El centrado cambia la **interpretación de
+los coeficientes**, pero deja intactas las predicciones, los residuos y el
+\(R^2\). Por eso es especialmente útil cuando hay interacciones con
+variables continuas.
+:::
+
+## 6.5. ¿Qué ocurre si se cambia la categoría de referencia?
+
+```{r gatos-sexo-referencia}
+cats_refM <- cats
+cats_refM$Sex <- relevel(cats_refM$Sex, ref = "M")
+m_refM <- lm(Hwt ~ Bwt + Sex, data = cats_refM)
+coef(m_con_sexo)
+coef(m_refM)
+stopifnot(isTRUE(all.equal(unname(fitted(m_refM)),
+                           unname(fitted(m_con_sexo)))))
+```
+
+::: {.solucion}
+**Respuesta razonada · Categorías de referencia.** Con F como referencia,
+`SexM` estima **M − F**. Con M como referencia, el nuevo coeficiente `SexF`
+estima **F − M** y por eso cambia de signo. La pendiente para `Bwt`, las
+predicciones, los residuos y la calidad del ajuste **no cambian**. No existe
+una categoría de referencia "correcta" por defecto: debe escogerse la que
+facilite la interpretación sustantiva y documentarse explícitamente.
+:::
+
+::: {.nota-docente}
+**Idea transferible a muchas bases de datos.** El mismo razonamiento sirve
+para grupos de tratamiento, regiones, categorías de producto o niveles de
+escolaridad. Si hay \(k\) categorías y un intercepto, R emplea por defecto
+\(k-1\) indicadores. Un modelo aditivo representa diferencias condicionales
+entre grupos con pendientes compartidas; una interacción permite que el
+efecto del predictor numérico **dependa del grupo**. La codificación no
+convierte la asociación observacional en una relación causal. Conviene
+**evitar introducir como factor un identificador único de cada fila**:
+podría consumir grados de libertad sin aportar una comparación de grupos
+generalizable.
+:::
+
+# Parte B. Regresión múltiple: resultados escolares
+
+`AER::CASchools` contiene información **observacional**, de 420 distritos
+escolares de California (1998–1999). Es útil para explicar relaciones
+condicionales; **no permite inferir que cambiar una variable cause por sí
+solo un cambio en la puntuación**.
+
+## 7. Variables y exploración
+
+Usaremos:
+
+- `score`: promedio de puntuaciones en matemáticas y lectura.
+- `stratio`: número de estudiantes dividido por docentes.
+- `english`: porcentaje de estudiantes que aprenden inglés.
+- `lunch`: porcentaje que cumple condiciones de almuerzo subsidiado.
+- `income`: ingreso promedio del distrito, en miles de USD.
+
+```{r escuelas-cargar}
+data("CASchools", package = "AER")
+escuelas <- CASchools
+escuelas$score <- with(escuelas, (math + read)/2)
+escuelas$stratio <- with(escuelas, students/teachers)
+variables <- c("score", "stratio", "english", "lunch", "income")
+escuelas <- na.omit(escuelas[variables])
+dim(escuelas)
+summary(escuelas)
+colSums(is.na(escuelas))
+```
+
+```{r escuelas-pares, fig.width=9, fig.height=9}
+pairs(escuelas, pch = 19, cex = 0.45, col = "#137F87",
+      main = "Relaciones entre las variables del modelo")
+```
+
+```{r escuelas-correlaciones}
+cor_score <- cor(escuelas[, variables])["score", setdiff(variables, "score")]
+sort(cor_score)
+```
+
+::: {.solucion}
+**Actividad resuelta · Exploración.** La base original contiene
+`r nrow(CASchools)` distritos y, después de conservar casos completos en
+las cinco variables elegidas, quedan `r nrow(escuelas)` observaciones.
+La matriz de dispersión permite buscar relaciones aproximadamente lineales,
+agrupamientos, valores extremos y asociaciones **entre los predictores**.
+La mayor correlación marginal en valor absoluto de `score` es con
+`r names(cor_score)[which.max(abs(cor_score))]`:
+\(r=`r fmt(cor_score[which.max(abs(cor_score))])`\).
+Este resultado solo compara relaciones **de dos variables a la vez**; no
+equivale a una asociación ajustada por las demás ni a un efecto causal.
+:::
+
+## 8. De una recta a un hiperplano
+
+\[
+\mathrm{score}_i=\beta_0+\beta_1\mathrm{stratio}_i
+ +\beta_2\mathrm{english}_i+\beta_3\mathrm{lunch}_i
+ +\beta_4\mathrm{income}_i+\varepsilon_i.
+\]
+
+```{r escuelas-ajustes}
+m_escolar_simple <- lm(score ~ stratio, data = escuelas)
+m_escolar_multiple <- lm(score ~ stratio + english + lunch + income,
+                        data = escuelas)
+summary(m_escolar_simple)
+summary(m_escolar_multiple)
+confint(m_escolar_multiple)
+```
+
+El coeficiente de `stratio` en el modelo múltiple describe la variación
+promedio de `score` asociada a una unidad de `stratio`, **manteniendo
+constantes las demás variables del modelo**. No es una afirmación causal.
+
+::: {.solucion}
+**Respuesta razonada · Interpretación completa del hiperplano.** El modelo
+simple estima una pendiente de `stratio` igual a
+`r fmt(coef(m_escolar_simple)[["stratio"]])` puntos de `score` por estudiante
+adicional por docente. En el modelo múltiple, esa pendiente es
+`r fmt(coef(m_escolar_multiple)[["stratio"]])`, **a igualdad de `english`,
+`lunch` e `income`**. La diferencia entre las dos estimaciones se debe a
+que la primera combina variación de `stratio` con variación de otros
+factores asociados; la segunda compara distritos con valores iguales de
+los predictores incluidos. No garantiza ausencia de confusión por
+variables no observadas.
+
+La ecuación estimada del hiperplano es
+
+\[
+\begin{aligned}
+\widehat{score}={}&
+`r fmt(coef(m_escolar_multiple)[["(Intercept)"]])` +
+(`r fmt(coef(m_escolar_multiple)[["stratio"]])`)\,stratio\\
+&+(`r fmt(coef(m_escolar_multiple)[["english"]])`)\,english
++(`r fmt(coef(m_escolar_multiple)[["lunch"]])`)\,lunch\\
+&+(`r fmt(coef(m_escolar_multiple)[["income"]])`)\,income.
+\end{aligned}
+\]
+
+Las unidades de los demás coeficientes del modelo múltiple son:
+
+- **`english`:** `r fmt(coef(m_escolar_multiple)[["english"]])` puntos
+  de `score` por **un punto porcentual** adicional de estudiantes que
+  aprenden inglés, manteniendo constantes los demás predictores.
+- **`lunch`:** `r fmt(coef(m_escolar_multiple)[["lunch"]])` puntos de
+  `score` por **un punto porcentual** adicional de estudiantes elegibles
+  para almuerzo subsidiado, con las demás variables fijas.
+- **`income`:** `r fmt(coef(m_escolar_multiple)[["income"]])` puntos de
+  `score` por **mil dólares adicionales** de ingreso distrital medio, con
+  los demás predictores constantes.
+- **Intercepto:** `r fmt(coef(m_escolar_multiple)[["(Intercept)"]])`
+  puntos cuando todos los predictores son cero. Puede ser una referencia
+  algebraica sin interpretación realista para un distrito.
+
+Como el modelo es aditivo, cada pendiente describe una diferencia
+**condicional** bajo la restricción de que las demás pendientes no cambian
+con esos valores. Si hubiera razones para esperar cambios de pendientes
+entre grupos, habría que estudiar una interacción y justificarla.
+:::
+
+## 9. Comparar modelos
+
+```{r escuelas-comparar}
+anova(m_escolar_simple, m_escolar_multiple)
+r2 <- c(simple = summary(m_escolar_simple)$r.squared,
+        multiple = summary(m_escolar_multiple)$r.squared)
+r2_aj <- c(simple = summary(m_escolar_simple)$adj.r.squared,
+           multiple = summary(m_escolar_multiple)$adj.r.squared)
+rbind(R2 = r2, R2_ajustado = r2_aj)
+```
+
+La prueba F de modelos anidados contrasta, bajo los supuestos pertinentes,
+si los predictores añadidos aportan información después de incluir `stratio`.
+Un aumento de R² dentro de la muestra no demuestra utilidad predictiva.
+
+::: {.solucion}
+**Actividad resuelta · Comparación dentro de muestra.** El \(R^2\) del
+modelo simple es `r fmt(r2[["simple"]])` y el del múltiple es
+`r fmt(r2[["multiple"]])`; sus \(R^2\) ajustados son, respectivamente,
+`r fmt(r2_aj[["simple"]])` y `r fmt(r2_aj[["multiple"]])`.
+La comparación anidada da un valor \(p\) de
+`r fmt_p(anova(m_escolar_simple, m_escolar_multiple)[2, "Pr(>F)"])`.
+La hipótesis nula conjunta es
+\(H_0:\beta_{english}=\beta_{lunch}=\beta_{income}=0\), una vez incluido
+`stratio`. Mientras que \(R^2\) siempre puede aumentar al añadir
+predictores, el \(R^2\) **ajustado** penaliza la complejidad. Ninguno de
+los dos sustituye una evaluación fuera de muestra.
+:::
+
+## 10. Diagnósticos del modelo múltiple
+
+```{r escuelas-diagnosticos, fig.width=9, fig.height=7}
+par(mfrow = c(2, 2))
+plot(m_escolar_multiple)
+par(mfrow = c(1, 1))
+sort(cooks.distance(m_escolar_multiple), decreasing = TRUE)[1:5]
+```
+
+```{r escuelas-influencia-resumen}
+umbral_cook_esc <- 4 / nobs(m_escolar_multiple)
+marcados_esc <- which(cooks.distance(m_escolar_multiple) > umbral_cook_esc)
+c(umbral_Cook = umbral_cook_esc,
+  casos_marcados = length(marcados_esc),
+  Cook_maximo = max(cooks.distance(m_escolar_multiple)))
+```
+
+```{r escuelas-diagnosticos-opcionales}
+if (requireNamespace("car", quietly = TRUE)) {
+  print(car::vif(m_escolar_multiple))
+} else cat("Opcional: instale 'car' para calcular VIF.\n")
+
+if (requireNamespace("lmtest", quietly = TRUE)) {
+  print(lmtest::bptest(m_escolar_multiple))
+} else cat("Opcional: instale 'lmtest' para Breusch-Pagan.\n")
+
+if (requireNamespace("lmtest", quietly = TRUE) &&
+    requireNamespace("sandwich", quietly = TRUE)) {
+  print(lmtest::coeftest(m_escolar_multiple,
+                        vcov. = sandwich::vcovHC(m_escolar_multiple,
+                                                 type = "HC3")))
+} else cat("Opcional: instale 'lmtest' y 'sandwich' para errores HC3.\n")
+```
+
+::: {.solucion}
+**Respuesta razonada · ¿Qué examinar en el modelo múltiple?**
+
+- **Linealidad condicional:** residuos contra valores ajustados sin patrones
+  curvos definidos. Una relación bivariada aparentemente curva no siempre
+  implica no linealidad en un modelo con más predictores, ni viceversa.
+- **Homocedasticidad:** residuos con amplitud similar a lo largo de los
+  valores ajustados. Si `lmtest::bptest()` muestra evidencia de varianza
+  no constante, los errores estándar clásicos requieren revisión;
+  `sandwich::vcovHC(..., type = "HC3")` permite una comparación robusta
+  de la inferencia, **sin cambiar los coeficientes LS**.
+- **Normalidad e influencia:** el Q–Q se refiere a la distribución de los
+  residuos. El criterio \(4/n\) marca
+  `r length(marcados_esc)` observaciones con Cook mayor que
+  `r fmt(umbral_cook_esc, 4)`; identificarlas invita a estudiar sus datos,
+  no a suprimirlas automáticamente.
+- **Multicolinealidad:** predictores fuertemente relacionados pueden
+  inflar errores estándar e inestabilizar coeficientes individuales;
+  `car::vif()` lo cuantifica si el paquete está disponible.
+- **Independencia y diseño:** distritos de una misma región podrían estar
+  relacionados. Los gráficos no prueban independencia y la dependencia
+  espacial o institucional merece atención en un análisis profesional.
+
+Una práctica correcta comunica **qué indicios aparecen en las figuras**,
+su gravedad posible y qué conclusiones deben quedar condicionadas a ellos;
+no afirma automáticamente que se cumplan todos los supuestos.
+:::
+
+## 11. Calidad predictiva fuera de muestra
+
+```{r escuelas-validacion}
+set.seed(2026)
+indices <- sample.int(nrow(escuelas), size = floor(0.80 * nrow(escuelas)))
+entrenamiento <- escuelas[indices, ]
+prueba <- escuelas[-indices, ]
+
+m_train_simple <- lm(score ~ stratio, data = entrenamiento)
+m_train_multiple <- lm(score ~ stratio + english + lunch + income,
+                       data = entrenamiento)
+
+y_prueba <- prueba$score
+pred_simple <- predict(m_train_simple, newdata = prueba)
+pred_multiple <- predict(m_train_multiple, newdata = prueba)
+
+indicadores <- data.frame(
+  modelo = c("Referencia: promedio", "Recta simple", "Regresión múltiple"),
+  RMSE = c(sqrt(mean((y_prueba - mean(entrenamiento$score))^2)),
+           sqrt(mean((y_prueba - pred_simple)^2)),
+           sqrt(mean((y_prueba - pred_multiple)^2))),
+  MAE = c(mean(abs(y_prueba - mean(entrenamiento$score))),
+          mean(abs(y_prueba - pred_simple)),
+          mean(abs(y_prueba - pred_multiple)))
+)
+indicadores
+```
+
+La partición se hace **antes** del ajuste. Es una evaluación didáctica basada
+en una sola partición aleatoria; para una conclusión predictiva sólida se
+recomendaría validación repetida o cruzada.
+
+::: {.solucion}
+**Actividad resuelta · Error fuera de muestra.** Se reservó el 20 % de los
+datos (\(n=`r nrow(prueba)`\)) sin usarlos para estimar parámetros; el ajuste
+se hizo con el 80 % (\(n=`r nrow(entrenamiento)`\)).
+
+El **RMSE** es
+\(\sqrt{\frac{1}{m}\sum_{i=1}^{m}(y_i-\hat y_i)^2}\) y penaliza más los
+errores grandes; el **MAE** es
+\(\frac{1}{m}\sum_{i=1}^{m}|y_i-\hat y_i|\), medido en las unidades de
+`score`. Para esta partición fija (`set.seed(2026)`), el RMSE mínimo
+corresponde a **`r indicadores$modelo[which.min(indicadores$RMSE)]`**:
+`r fmt(min(indicadores$RMSE))` puntos. El cuadro permite comparar también
+el MAE y el predictor ingenuo que siempre utiliza la media de entrenamiento.
+Esta **clasificación de modelos podría variar** con otra partición; no
+debe convertirse en una sentencia general sobre cualquier población.
+:::
+
+```{r escuelas-prediccion-individual}
+pronostico_escuela <- predict(
+  m_escolar_multiple, newdata = escuelas[1, , drop = FALSE],
+  interval = "prediction", level = 0.95)
+pronostico_escuela
+```
+
+::: {.solucion}
+**Respuesta razonada · Distrito individual.** Para las características
+del primer distrito de la base analítica, el valor predicho es
+`r fmt(pronostico_escuela[1, "fit"])` puntos y el intervalo de predicción
+clásico al 95 % abarca
+[`r fmt(pronostico_escuela[1, "lwr"])`,
+`r fmt(pronostico_escuela[1, "upr"])`] puntos. El intervalo se calculó
+con el modelo entrenado sobre **todas** las observaciones de `escuelas` y
+el distrito también pertenece a esa muestra: sirve para **ilustrar la
+sintaxis**, pero **no es una validación predictiva independiente**. Para
+medir desempeño usamos únicamente el conjunto `prueba` de la sección 11.
+:::
+
+## 12. Reflexión integradora: preguntas **y respuestas**
+
+Las cinco actividades siguientes recuperan el propósito de la sesión.
+**Primero intente resolverlas sin leer los recuadros; luego contraste su
+razonamiento con la solución.** Las respuestas numéricas se derivan de los
+modelos ajustados anteriormente.
+
+1. En el modelo simple, reporte la ecuación, R², un intervalo para la pendiente
+   y las conclusiones principales de los diagnósticos.
+2. Compare intervalos de confianza y de predicción e interprete su diferencia.
+3. En el modelo escolar, explique el cambio del coeficiente de `stratio` entre
+   la regresión simple y la múltiple.
+4. Compare R² ajustado y los errores de prueba: ¿cuál responde a la pregunta
+   explicativa y cuál a la predictiva?
+5. Justifique por qué ninguna correlación aquí demuestra una relación causal.
+
+::: {.solucion}
+**Solución 1 · Recta LS, \(R^2\), pendiente y diagnósticos.**
+
+\[
+\widehat{Hwt}=`r fmt(coef(m_simple)[["(Intercept)"]])`
+ + `r fmt(coef(m_simple)[["Bwt"]])`\,Bwt.
+\]
+
+El \(R^2\) es `r fmt(summary(m_simple)$r.squared)`. El intervalo de
+confianza clásico al 95 % de la pendiente, obtenido por `confint(m_simple)`,
+es [`r fmt(confint(m_simple)["Bwt", 1])`,
+`r fmt(confint(m_simple)["Bwt", 2])`] g/kg. **Conclusión:** se describe una
+asociación lineal marginal entre peso corporal y cardíaco dentro de la
+población representada por la muestra. La lectura de los cuatro diagnósticos
+debe indicar curvatura, cambios de dispersión, colas del Q–Q y puntos
+influyentes; la independencia queda pendiente de evaluar desde el diseño.
+La pendiente no tiene interpretación causal.
+:::
+
+::: {.solucion}
+**Solución 2 · Intervalos.** Para `Bwt = 3.2`, ambos comparten la predicción
+puntual `r fmt(ic_gato[1, "fit"])` g, pero responden a preguntas distintas:
+el intervalo [`r fmt(ic_gato[1, "lwr"])`,
+`r fmt(ic_gato[1, "upr"])`] g se refiere a la **media esperada** para
+gatos de ese peso; el intervalo [`r fmt(ip_gato[1, "lwr"])`,
+`r fmt(ip_gato[1, "upr"])`] g se refiere al peso cardíaco de **un gato
+individual nuevo**. El segundo incluye la variabilidad residual además
+de la incertidumbre de estimación y, por ello, es más amplio.
+:::
+
+::: {.solucion}
+**Solución 3 · Coeficiente escolar marginal frente a condicional.** La
+pendiente de `stratio` pasa de
+`r fmt(coef(m_escolar_simple)[["stratio"]])` a
+`r fmt(coef(m_escolar_multiple)[["stratio"]])` puntos de `score` por una
+unidad de ratio estudiantes/docente. El modelo simple compara distritos
+sin ajustar por las demás variables; el múltiple mantiene fijos los
+porcentajes `english`, `lunch` y el ingreso `income`. La diferencia entre
+coeficientes no es una anomalía de `lm()`: responde a **preguntas de
+asociación distintas**. El ajuste no elimina factores omitidos ni
+establece un efecto causal de tamaño de clase.
+:::
+
+::: {.solucion}
+**Solución 4 · Explicar frente a predecir.** El \(R^2\) ajustado se
+calcula **en el conjunto usado para estimar los modelos**, con una
+penalización por número de parámetros, y sirve para comparar ajuste
+descriptivo entre modelos anidados o razonablemente comparables. En
+nuestro ejemplo toma los valores `r fmt(r2_aj[["simple"]])` (simple) y
+`r fmt(r2_aj[["multiple"]])` (múltiple). Los errores RMSE y MAE del
+**conjunto de prueba** responden a otra pregunta: *¿qué tan bien se
+pronostican casos no usados al estimar?* El menor RMSE observado aquí
+corresponde a `r indicadores$modelo[which.min(indicadores$RMSE)]`,
+con la reserva de que proviene de una única partición 80/20.
+:::
+
+::: {.solucion}
+**Solución 5 · Asociación frente a causalidad.** Las observaciones no se
+asignaron aleatoriamente a pesos, sexos o características distritales.
+Pueden existir variables omitidas (p. ej., edad, salud o raza en gatos;
+condiciones socioeconómicas y políticas escolares en distritos),
+dependencia entre observaciones y sesgos de medición o selección. Ajustar
+una regresión y obtener valores \(p\) pequeños **no crea por sí mismo un
+experimento** ni prueba la dirección de una influencia. El modelo describe
+asociaciones y puede predecir bajo condiciones apropiadas; una afirmación
+causal requiere un diseño de identificación adicional.
+:::
+
+## 13. Pregunta de ampliación: ¿qué aporta una variable categórica?
+
+**Actividad.** Explique por qué `lm(Hwt ~ Bwt + Sex)` y
+`lm(Hwt ~ Bwt * Sex)` no responden exactamente a la misma pregunta.
+¿Por qué es importante indicar la categoría de referencia?
+
+::: {.solucion}
+**Solución.** `Hwt ~ Bwt + Sex` pregunta si, a igual peso, hay una
+diferencia **constante** entre F y M. `Hwt ~ Bwt * Sex` pregunta además
+si la asociación entre peso corporal y cardíaco **varía según el sexo**.
+La interacción introduce un coeficiente de diferencia de pendientes.
+Con F como referencia, `SexM` representa M − F; al pasar la referencia
+a M, `SexF` representa F − M. Cambia la forma de presentar los
+coeficientes, **no las predicciones**. En presencia de interacción, la
+diferencia entre sexos debe enunciarse **para un peso específico**, por
+ejemplo `Bwt = 3.2`, o mediante el modelo centrado de la sección 6.4.
+:::
+
+## Opción alternativa para otro contexto: ventas de sillas infantiles
+
+`ISLR2::Carseats` tiene 400 tiendas, una respuesta `Sales` y predictores
+numéricos y categóricos. **Es una base simulada**; resulta útil para practicar
+variables indicadoras y comparar modelos, pero no para extraer conclusiones
+empíricas sobre el mercado real.
+
+```{r alternativa-carseats, eval=FALSE}
+# install.packages("ISLR2")  # ejecutar una sola vez, si es necesario
+data("Carseats", package = "ISLR2")
+Carseats$ShelveLoc <- relevel(Carseats$ShelveLoc, ref = "Bad")
+table(Carseats$ShelveLoc)
+contrasts(Carseats$ShelveLoc)
+m_ventas <- lm(Sales ~ Price + Advertising + CompPrice + Income + ShelveLoc,
+              data = Carseats)
+summary(m_ventas)
+par(mfrow = c(2,2)); plot(m_ventas); par(mfrow = c(1,1))
+```
+
+::: {.solucion}
+**Guía de interpretación del ejemplo opcional.** Al definir `Bad` como
+referencia, `ShelveLocGood` compara las ventas esperadas en tiendas con
+ubicación de estantería *Good* frente a *Bad*, **a igual precio,
+publicidad, precio de competidores e ingreso**. `ShelveLocMedium`
+compara *Medium* frente a *Bad* bajo las mismas condiciones.
+La variable tiene tres categorías, de modo que se necesitan solo
+**dos indicadores** con intercepto. No hay que cambiar ni duplicar
+la respuesta `Sales`: el diseño de regresión se ocupa de codificar el
+predictor categórico. Como esta práctica es **opcional** y el bloque está
+marcado `eval=FALSE`, sus números aparecerán solo cuando el docente lo
+habilite e instale `ISLR2`.
+:::
+
+## Referencias de procedencia de los datos
+
+- Birkes, D. y Dodge, Y. (1993). *Alternative Methods of Regression*. Wiley,
+  capítulo 3. **Referencia para la teoría, no fuente de `cats` ni `CASchools`.**
+- Documentación oficial de R, paquete MASS: [cats](https://stat.ethz.ch/R-manual/R-devel/library/MASS/html/cats.html).
+- Documentación oficial CRAN, paquete AER: [CASchools](https://search.r-project.org/CRAN/refmans/AER/html/CASchools.html).
+- Documentación oficial CRAN, paquete ISLR2: [Carseats](https://search.r-project.org/CRAN/refmans/ISLR2/html/Carseats.html).
+- Ayuda local: `?lm`, `?predict.lm`, `?plot.lm`, `?MASS::cats` y `?AER::CASchools`.
+- Ayuda local sobre categorías e interacciones:
+  `?factor`, `?contrasts`, `?model.matrix`, `?relevel`, `?formula`.
+
+```{r sesion-r}
+sessionInfo()
+```

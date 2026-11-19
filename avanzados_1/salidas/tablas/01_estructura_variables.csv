@@ -1,0 +1,14 @@
+"variable";"tipo";"n_categorias";"faltantes"
+"fecha";"Fecha (mensual)";12;0
+"grupo";"Cualitativa nominal";8;0
+"producto";"Cualitativa nominal";349;0
+"cpc";"Identificador";140;0
+"mercado";"Cualitativa nominal";80;0
+"ciudad";"Cualitativa nominal";59;0
+"departamento";"Cualitativa nominal";24;0
+"region";"Cualitativa nominal";5;0
+"tipo_plaza";"Cualitativa ordinal-nominal";4;0
+"es_capital";"Cualitativa binaria";2;0
+"precio_kg";"Cuantitativa continua";NA;0
+"brecha_pct";"Cuantitativa continua (derivada)";NA;0
+"n_mercados_producto";"Cuantitativa discreta (derivada)";45;0

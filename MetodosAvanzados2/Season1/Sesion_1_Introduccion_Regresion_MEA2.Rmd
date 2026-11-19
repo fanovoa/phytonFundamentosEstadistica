@@ -1,0 +1,523 @@
+---
+title: "Métodos alternativos de regresión lineal"
+subtitle: "Sesión 1 | Introducción, LS y diagnóstico"
+author: "Métodos Estadísticos Avanzados II · Guía de laboratorio en RStudio"
+date: "27 de octubre de 2026"
+lang: es
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    highlight: tango
+    code_folding: show
+    df_print: default
+    self_contained: true
+---
+
+<style>
+body {font-family: "Source Sans Pro", "Segoe UI", Arial, sans-serif; color:#233445;}
+h1, h2, h3 {color:#143C58; font-weight:700;}
+h1 {border-bottom:2px solid #D6A053; padding-bottom:.24em; margin-top:1.5em;}
+blockquote {background:#F4F8FA; border-left:4px solid #D6A053; padding:12px 19px; color:#25415A;}
+.nota {background:#EAF3F5; border-left:4px solid #1D8294; padding:14px 18px; margin:18px 0;}
+.pregunta {background:#FFF7EA; border-left:4px solid #D6A053; padding:14px 18px; margin:18px 0;}
+.smallnote {font-size:.91em; color:#557187;}
+table {font-size:.94em;}
+</style>
+
+```{r configuracion, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  fig.width = 9, fig.height = 4.8, fig.align = "center",
+  dpi = 125, out.width = "96%", comment = "##", collapse = TRUE
+)
+options(digits = 4, scipen = 5)
+color_azul <- "#1A4C68"
+color_coral <- "#C46D43"
+color_turquesa <- "#207F83"
+```
+
+> **Pregunta central:** ¿cuándo podemos confiar en una regresión por mínimos cuadrados y qué señales nos advierten que conviene cambiar la inferencia, el modelo o el procedimiento de estimación?
+
+**Alcance.** Esta primera sesión estudia el modelo lineal, el criterio de mínimos cuadrados (LS/OLS), la inspección gráfica, los residuos, la influencia, la heterocedasticidad y el sentido de seis enfoques de regresión. **Solo se ajustan modelos LS.** La estimación formal de LAD, M de Huber, rangos, Ridge y bayesiana se reserva para sesiones posteriores.
+
+**Duración orientativa:** 90 a 110 minutos, más una actividad autónoma. Los datos y el código están incorporados en este documento. No requiere CSV, conexión a internet ni paquetes estadísticos adicionales para compilar, una vez que RStudio tenga instalados **rmarkdown** y **knitr**.
+
+# Resultados de aprendizaje
+
+Al terminar la sesión, el estudiante debería poder:
+
+1. Distinguir el modelo de regresión del método que estima sus coeficientes.
+2. Reconocer cuándo conviene LS y qué problemas motivan LAD, Huber, rangos, Ridge y bayesiana.
+3. Ajustar una regresión simple y una múltiple con la función lm().
+4. Interpretar pendientes, predicciones, residuos, \(R^2\) e intervalos de confianza.
+5. Distinguir problemas de especificación, heterocedasticidad e influencia.
+6. Justificar si procede mantener LS, corregir su inferencia o estudiar otro estimador.
+
+| Momento | Tiempo | Producto |
+|:--|:--:|:--|
+| Fundamentos y caso del libro | 20 min | Interpretación de sensibilidad de LS |
+| Dos bases didácticas | 15 min | Identificación de variables y exploración |
+| Ajuste LS y diagnóstico | 30 min | Modelos, gráficos y observaciones influyentes |
+| Inferencia HC3 y decisiones | 20 min | Comparación de errores estándar |
+| Debate y cierre | 10 min | Recomendación razonada |
+
+# Una pregunta estadística antes de cualquier algoritmo
+
+Supongamos una respuesta \(Y_i\) y \(p\) variables explicativas \(x_{i1},\ldots,x_{ip}\). El modelo lineal es
+
+\[
+Y_i=\beta_0+\beta_1x_{i1}+\cdots+\beta_px_{ip}+\varepsilon_i,
+\qquad i=1,\ldots,n.
+\]
+
+Cuando \(E(\varepsilon_i\mid X)=0\), la combinación lineal describe la **media condicional** de \(Y\). En notación matricial, \(\mathbf y=X\boldsymbol\beta+\boldsymbol\varepsilon\). La palabra *lineal* se refiere a los parámetros: el término \(\beta_2x_i^2\) puede integrar un modelo lineal en \(\boldsymbol\beta\).
+
+**Tres usos:** describir asociaciones, predecir la respuesta para valores razonables de \(X\) y contrastar hipótesis. Una asociación ajustada **no demuestra causalidad**.
+
+Elegido el modelo, aparece otra decisión: **¿cómo medir la falta de ajuste?** Para los residuos \(e_i=y_i-\widehat y_i\), distintas respuestas producen distintos métodos.
+
+| Método | Criterio o idea fundamental | Situación que lo motiva |
+|:--|:--|:--|
+| **LS** | Minimiza \(\sum e_i^2\) | Media condicional, referencia bajo errores bien comportados |
+| **LAD** | Minimiza \(\sum |e_i|\) | Mediana condicional, colas pesadas y respuestas atípicas |
+| **M de Huber** | Pérdida cuadrática cerca de cero, aproximadamente lineal en colas | Reducir la influencia de residuos grandes |
+| **Por rangos** | Usa rangos de residuos para un predictor lineal | Menor dependencia de una distribución paramétrica específica |
+| **Ridge** | Penalización al tamaño de los coeficientes | Predictores muy correlacionados y estabilidad predictiva |
+| **Bayesiana** | Verosimilitud combinada con distribución previa | Información previa e incertidumbre posterior |
+
+<div class="nota">
+**Distinción esencial.** Los seis enfoques pueden conservar una función lineal en sus coeficientes. La regresión «por rangos» del libro de Birkes y Dodge no es, por definición, un suavizador que ajusta curvas arbitrarias. Los estimadores resistentes a residuos grandes también pueden verse afectados por observaciones con gran leverage.
+</div>
+
+## ¿Por qué comenzar con LS?
+
+\[
+\widehat{\boldsymbol\beta}_{LS}
+=\arg\min_{\boldsymbol\beta}
+\sum_{i=1}^n (y_i-\mathbf x_i^\top\boldsymbol\beta)^2.
+\]
+
+Si \(X\) tiene rango columna completo,
+\(\widehat{\boldsymbol\beta}_{LS}=(X^\top X)^{-1}X^\top\mathbf y\).
+Con media de error nula condicional a \(X\), LS es insesgado. Bajo las condiciones de Gauss-Markov es el estimador **lineal insesgado** de menor varianza. La normalidad no se necesita para calcular LS ni para Gauss-Markov; con otros supuestos permite inferencia exacta en pequeñas muestras.
+
+**Debilidad clave:** cuadrar residuos puede hacer dominante una observación extrema en \(Y\). Una observación con \(X\) extremo puede alterar fuertemente la pendiente.
+
+# Caso de Birkes y Dodge: natalidad y urbanización
+
+El capítulo 1 presenta **14 países de Norte y Centroamérica**, con tasa de natalidad en 1980–1985 y porcentaje urbano en 1980. Son datos **históricos** empleados como ejemplo metodológico, no como descripción de poblaciones actuales (Birkes y Dodge, 1993, §1.6, tabla 1.3).
+
+```{r caso-dodge-datos}
+paises <- data.frame(
+  pais = c("Canada", "Costa Rica", "Cuba", "Republica Dominicana",
+           "El Salvador", "Guatemala", "Haiti", "Honduras", "Jamaica",
+           "Mexico", "Nicaragua", "Panama", "Trinidad y Tobago",
+           "Estados Unidos"),
+  natalidad = c(16.2, 30.5, 16.9, 33.1, 40.2, 38.4, 41.3,
+                43.9, 28.3, 33.9, 44.2, 28.0, 24.6, 16.0),
+  urbano = c(55.0, 27.3, 33.3, 37.1, 11.5, 14.2, 13.9,
+             19.0, 33.1, 43.2, 28.5, 37.7, 6.8, 56.5)
+)
+modelo_todos <- lm(natalidad ~ urbano, data = paises)
+modelo_sin_tt <- lm(natalidad ~ urbano,
+                   data = subset(paises, pais != "Trinidad y Tobago"))
+round(rbind(LS_con_14_paises = coef(modelo_todos),
+            LS_sin_Trinidad_Tobago = coef(modelo_sin_tt)), 3)
+```
+
+```{r caso-dodge-figura, fig.cap="Datos históricos de la tabla 1.3: Trinidad y Tobago altera la recta LS."}
+plot(paises$urbano, paises$natalidad,
+     pch = 19, cex = 1.1, col = color_azul,
+     xlab = "Poblacion urbana (%) en 1980",
+     ylab = "Natalidad por cada 1.000 habitantes, 1980-1985",
+     main = "Sensibilidad de minimos cuadrados")
+i_tt <- which(paises$pais == "Trinidad y Tobago")
+points(paises$urbano[i_tt], paises$natalidad[i_tt],
+       pch = 21, cex = 1.8, bg = color_coral, col = color_coral)
+text(paises$urbano[i_tt], paises$natalidad[i_tt] - 2,
+     "Trinidad y Tobago", pos = 4, cex = 0.84)
+abline(modelo_todos, lwd = 3, col = color_azul)
+abline(modelo_sin_tt, lwd = 3, col = color_coral, lty = 2)
+legend("topright",
+       c("LS: 14 paises", "LS: sin Trinidad y Tobago"),
+       col = c(color_azul, color_coral), lwd = 3,
+       lty = c(1, 2), bty = "n")
+```
+
+El libro reporta aproximadamente \(\widehat Y=43-0.40X\) con 14 países y \(\widehat Y=49-0.55X\) sin Trinidad y Tobago. Como **adelanto**, presenta una recta LAD de aproximadamente \(\widehat Y=46-0.54X\). **No ajustaremos LAD en esta sesión.**
+
+```{r caso-dodge-influencia}
+infl_paises <- data.frame(
+  pais = paises$pais,
+  leverage = round(hatvalues(modelo_todos), 3),
+  Cook = round(cooks.distance(modelo_todos), 3)
+)
+head(infl_paises[order(-infl_paises$Cook), ], 5)
+```
+
+<div class="pregunta">
+**Discusión (4 min).** ¿Cómo cambia la interpretación de un punto porcentual adicional de urbanización? ¿El punto debe eliminarse automáticamente? ¿En qué difieren un residuo grande y el leverage?
+</div>
+
+El análisis con y sin una observación mide sensibilidad. Primero se investiga la procedencia y la calidad de los datos, en lugar de excluirlos mecánicamente.
+
+# Dos bases sintéticas de la sesión 1
+
+Los scripts del ZIP mencionan **datos_planta_eficiencia** y **datos_logistica_entregas**, pero los datos originales no están adjuntos. La guía HTML introductoria contiene su construcción sintética. Se reproducen aquí esas variables, semillas y mecanismos para que el laboratorio sea **autocontenido**. No representan mediciones de empresas reales.
+
+## Planta: algunas respuestas atípicas
+
+```{r crear-planta}
+set.seed(2026)
+n_planta <- 120
+planta <- data.frame(
+  temperatura_horno_c = rnorm(n_planta, 720, 24),
+  humedad_relativa_pct = runif(n_planta, 30, 78),
+  horas_mantenimiento_semana = runif(n_planta, 1.5, 11),
+  experiencia_operador_anios = runif(n_planta, 0.5, 18)
+)
+planta$eficiencia_lote_pct <- with(
+  planta,
+  42 + 0.055 * temperatura_horno_c -
+    0.10 * humedad_relativa_pct +
+    0.75 * horas_mantenimiento_semana +
+    0.48 * experiencia_operador_anios
+) + rnorm(n_planta, 0, 3.2)
+indices_atipicos <- c(12, 58, 104)
+planta$eficiencia_lote_pct[indices_atipicos] <-
+  planta$eficiencia_lote_pct[indices_atipicos] + c(9, -8, 10)
+dim(planta)
+head(planta, 5)
+summary(planta$eficiencia_lote_pct)
+```
+
+## Logística: varianza creciente con la distancia
+
+```{r crear-logistica}
+set.seed(2027)
+n_logistica <- 160
+logistica <- data.frame(
+  distancia_km = runif(n_logistica, 2, 55),
+  peso_paquete_kg = runif(n_logistica, 0.5, 24),
+  numero_paradas = sample(0:8, n_logistica, replace = TRUE),
+  indice_trafico = runif(n_logistica, 0.10, 1.00)
+)
+sigma_i <- 2.5 + 0.18 * logistica$distancia_km
+error_logistica <- rnorm(n_logistica, 0, sd = sigma_i)
+logistica$tiempo_entrega_min <- with(
+  logistica,
+  15 + 1.30 * distancia_km + 0.45 * peso_paquete_kg +
+    3 * numero_paradas + 16 * indice_trafico
+) + error_logistica
+dim(logistica)
+head(logistica, 5)
+summary(logistica$tiempo_entrega_min)
+```
+
+<div class="nota">
+**Interpretación de la simulación:** en planta se perturban tres respuestas. En logística se impone deliberadamente \(\operatorname{Var}(\varepsilon_i\mid X_i)=\sigma_i^2\), donde \(\sigma_i=2.5+0.18\,\text{distancia}_i\). La heterocedasticidad responde al proceso de generación de los datos.
+</div>
+
+# Exploración antes de estimar
+
+Un dispersograma ayuda a detectar dirección, curvatura, dispersión cambiante, valores aislados y unidades. Una nube aproximadamente lineal no garantiza que el modelo **múltiple** sea adecuado.
+
+```{r exploracion-planta, fig.height=6.5, fig.cap="Planta: eficiencia frente a cada predictor. Las rectas son ajustes bivariados exploratorios."}
+par(mfrow = c(2, 2), mar = c(4.1, 4.1, 1.7, 1))
+for (v in names(planta)[1:4]) {
+  plot(planta[[v]], planta$eficiencia_lote_pct,
+       pch = 19, cex = 0.65,
+       col = adjustcolor(color_azul, 0.66),
+       xlab = v, ylab = "Eficiencia (%)", main = "")
+  abline(lm(planta$eficiencia_lote_pct ~ planta[[v]]),
+         col = color_coral, lwd = 2)
+}
+par(mfrow = c(1, 1))
+```
+
+```{r exploracion-logistica, fig.height=6.5, fig.cap="Logística: tiempo de entrega frente a las cuatro variables explicativas."}
+par(mfrow = c(2, 2), mar = c(4.1, 4.1, 1.7, 1))
+for (v in names(logistica)[1:4]) {
+  plot(logistica[[v]], logistica$tiempo_entrega_min,
+       pch = 19, cex = 0.65,
+       col = adjustcolor(color_turquesa, 0.66),
+       xlab = v, ylab = "Tiempo (min)", main = "")
+  abline(lm(logistica$tiempo_entrega_min ~ logistica[[v]]),
+         col = color_coral, lwd = 2)
+}
+par(mfrow = c(1, 1))
+```
+
+Estas rectas son **regresiones simples exploratorias**. Sus pendientes pueden cambiar al controlar por otras variables, sin que ello sea una contradicción.
+
+<div class="pregunta">
+**Pausa (5 min).** Elija un predictor de cada base. Interprete la dirección de su asociación con la respuesta e indique una limitación de inferir relaciones multivariadas a partir de un solo dispersograma.
+</div>
+
+# Ajuste LS para planta
+
+```{r modelo-planta}
+modelo_planta <- lm(
+  eficiencia_lote_pct ~ temperatura_horno_c +
+    humedad_relativa_pct + horas_mantenimiento_semana +
+    experiencia_operador_anios,
+  data = planta
+)
+summary(modelo_planta)
+round(confint(modelo_planta), 3)
+```
+
+El coeficiente de temperatura representa el cambio estimado en la **eficiencia, medida en puntos porcentuales**, ante un aumento de **1 °C**, **manteniendo constantes** humedad, mantenimiento y experiencia.
+
+El \(R^2\) resume la proporción de variabilidad muestral que explica el ajuste LS frente a un modelo con solo intercepto. **No valida los supuestos, no demuestra causalidad y no garantiza pronósticos nuevos.**
+
+## Diagnóstico gráfico clásico
+
+```{r planta-diagnosticos, fig.height=6.8, fig.cap="Los cuatro diagnósticos habituales de lm(): residuos, normalidad visual, escala y leverage."}
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+plot(modelo_planta, which = c(1, 2, 3, 5), ask = FALSE,
+     pch = 19, col = adjustcolor(color_azul, 0.72))
+par(mfrow = c(1, 1))
+```
+
+- **Residuos frente a ajustados:** una curva persistente sugiere función media mal especificada.
+- **QQ-plot:** desviaciones de la recta sugieren discrepancias de normalidad.
+- **Escala-localización:** una tendencia ascendente sugiere varianza no constante.
+- **Residuos frente a leverage:** señala observaciones con potencial de influencia; se complementa con la distancia de Cook.
+
+```{r planta-influencia}
+umbral_cook_planta <- 4 / nrow(planta)  # Regla orientativa, no test.
+ranking_planta <- data.frame(
+  fila = seq_len(nrow(planta)),
+  residuo_studentizado = rstudent(modelo_planta),
+  leverage = hatvalues(modelo_planta),
+  Cook = cooks.distance(modelo_planta)
+)
+head(ranking_planta[order(-ranking_planta$Cook), ], 8)
+sum(ranking_planta$Cook > umbral_cook_planta)
+```
+
+**Experimento de sensibilidad.** Como conocemos qué observaciones fueron perturbadas artificialmente, podemos comparar los coeficientes con ellas y sin ellas. El ejercicio **no recomienda eliminar observaciones reales**.
+
+```{r planta-sensibilidad}
+modelo_planta_sin <- update(modelo_planta,
+                           data = planta[-indices_atipicos, ])
+tabla_sensibilidad <- data.frame(
+  termino = names(coef(modelo_planta)),
+  LS_todos = unname(coef(modelo_planta)),
+  LS_sin_tres = unname(coef(modelo_planta_sin))
+)
+tabla_sensibilidad$cambio <- tabla_sensibilidad$LS_todos -
+  tabla_sensibilidad$LS_sin_tres
+print(data.frame(
+  termino = tabla_sensibilidad$termino,
+  round(tabla_sensibilidad[-1], 4),
+  row.names = NULL
+))
+```
+
+<div class="pregunta">
+**Pregunta (3 min).** ¿Qué coeficiente parece más estable? ¿Las tres respuestas perturbadas necesariamente coinciden con las mayores distancias de Cook? ¿Por qué no?
+</div>
+
+# Ajuste LS para logística
+
+```{r modelo-logistica}
+modelo_logistica <- lm(
+  tiempo_entrega_min ~ distancia_km + peso_paquete_kg +
+    numero_paradas + indice_trafico,
+  data = logistica
+)
+summary(modelo_logistica)
+round(confint(modelo_logistica), 3)
+```
+
+La pendiente de distancia estima los **minutos adicionales por kilómetro**, ajustando por peso, paradas e intensidad del tráfico. Antes de interpretar sus intervalos debemos estudiar la dispersión residual.
+
+```{r logistica-diagnostico, fig.height=5.9, fig.cap="La dispersión residual creciente con la distancia es evidencia gráfica de heterocedasticidad."}
+par(mfrow = c(1, 2), mar = c(4.6, 4.6, 2.3, 1))
+plot(logistica$distancia_km, residuals(modelo_logistica),
+     pch = 19, col = adjustcolor(color_turquesa, 0.7),
+     xlab = "Distancia (km)", ylab = "Residuo LS (min)",
+     main = "Residuos vs. distancia")
+abline(h = 0, lty = 2, col = color_coral, lwd = 2)
+qqnorm(residuals(modelo_logistica), pch = 19,
+       col = adjustcolor(color_azul, 0.7),
+       main = "QQ-plot de residuos")
+qqline(residuals(modelo_logistica), col = color_coral, lwd = 2)
+par(mfrow = c(1, 1))
+```
+
+## Prueba auxiliar de heterocedasticidad
+
+El siguiente código calcula la versión **estudiantizada** del contraste de Breusch-Pagan (Koenker) con la regresión auxiliar de residuos cuadrados. Su distribución de referencia es asintótica. Se incluye una implementación en R base para evitar dependencias de CRAN durante la clase.
+
+```{r funcion-bp}
+prueba_bp_koenker <- function(modelo) {
+  Z <- as.data.frame(model.matrix(modelo)[, -1, drop = FALSE])
+  names(Z) <- make.names(names(Z), unique = TRUE)
+  auxiliar <- lm(residuals(modelo)^2 ~ ., data = Z)
+  LM <- nobs(modelo) * summary(auxiliar)$r.squared
+  gl <- ncol(Z)
+  data.frame(
+    prueba = "Koenker / BP estudiantizada",
+    estadistico = LM,
+    gl = gl,
+    valor_p = pchisq(LM, df = gl, lower.tail = FALSE)
+  )
+}
+prueba_bp_koenker(modelo_planta)
+prueba_bp_koenker(modelo_logistica)
+```
+
+Un valor \(p\) pequeño puede apoyar la presencia de variabilidad residual dependiente de \(X\), pero la prueba no identifica automáticamente la mejor solución. **Estos datos sintéticos no tienen orden temporal**; por eso no corresponde interpretar Durbin-Watson como contraste de independencia temporal para ellos.
+
+## Normalidad y colinealidad son preguntas diferentes
+
+```{r pruebas-adicionales}
+shapiro.test(residuals(modelo_planta))
+shapiro.test(residuals(modelo_logistica))
+
+# Solo para modelos cuyos predictores son todos numericos:
+# VIF es la diagonal de la inversa de la matriz de correlaciones.
+vif_numericos <- function(modelo) {
+  pred <- model.matrix(modelo)[, -1, drop = FALSE]
+  round(diag(solve(cor(pred))), 3)
+}
+vif_numericos(modelo_planta)
+vif_numericos(modelo_logistica)
+```
+
+No rechazar Shapiro-Wilk **no demuestra** normalidad. Rechazarlo tampoco invalida automáticamente las pendientes LS. Los VIF altos significan dificultad para distinguir efectos parciales de predictores correlacionados, y motivan métodos como **Ridge**.
+
+# Corregir la inferencia no es cambiar el estimador
+
+Ante heterocedasticidad, los errores estándar clásicos de LS pueden ser inadecuados aunque la especificación de la media sea razonable. Una opción es usar una matriz de covarianzas **HC3** sin cambiar los coeficientes LS:
+
+\[
+\widehat{\mathrm{Var}}_{HC3}(\widehat\beta)
+=(X^\top X)^{-1}
+\left[\sum_{i=1}^{n}
+\frac{e_i^2}{(1-h_{ii})^2}\mathbf x_i\mathbf x_i^\top\right]
+(X^\top X)^{-1}.
+\]
+
+Esta implementación usa R base. Si se dispone del paquete **sandwich**, añadimos una comprobación opcional.
+
+```{r funcion-hc3}
+vcov_hc3_base <- function(modelo) {
+  X <- model.matrix(modelo)
+  e <- residuals(modelo)
+  h <- hatvalues(modelo)
+  B <- solve(crossprod(X))
+  pesos <- (e / (1 - h))^2
+  M <- crossprod(X, X * as.vector(pesos))
+  B %*% M %*% B
+}
+
+comparar_inferencia <- function(modelo) {
+  b <- coef(modelo)
+  se_clasico <- summary(modelo)$coefficients[, 2]
+  se_hc3 <- sqrt(diag(vcov_hc3_base(modelo)))
+  data.frame(
+    termino = names(b),
+    beta_LS = as.numeric(b),
+    EE_clasico = as.numeric(se_clasico),
+    EE_HC3 = as.numeric(se_hc3),
+    p_clasico = summary(modelo)$coefficients[, 4],
+    p_HC3_aprox = 2 * pt(abs(b / se_hc3),
+                         df = df.residual(modelo),
+                         lower.tail = FALSE),
+    row.names = NULL
+  )
+}
+tabla_inferencia <- comparar_inferencia(modelo_logistica)
+print(data.frame(termino = tabla_inferencia$termino,
+                 round(tabla_inferencia[-1], 4),
+                 row.names = NULL))
+```
+
+```{r comprobar-hc3, results='asis'}
+if (requireNamespace("sandwich", quietly = TRUE)) {
+  diferencia_maxima <- max(abs(
+    vcov_hc3_base(modelo_logistica) -
+      sandwich::vcovHC(modelo_logistica, type = "HC3")
+  ))
+  cat("Diferencia máxima frente a sandwich::vcovHC:",
+      signif(diferencia_maxima, 3))
+} else {
+  cat("Comprobación opcional con sandwich omitida.")
+}
+```
+
+**Lectura:** las columnas **beta_LS** no cambian al sustituir los errores estándar. Los valores \(p\) HC3 de la tabla emplean una aproximación \(t\) con grados de libertad residuales; **no** equivalen a una prueba exacta de pequeñas muestras. Los «errores estándar robustos» y la «regresión M de Huber» resuelven problemas distintos.
+
+<div class="pregunta">
+**Debate (5 min).** Si en logística los errores estándar HC3 difieren de los clásicos, ¿qué conclusiones pueden cambiar? ¿Cambiaría la ecuación ajustada o solamente la incertidumbre atribuida a sus coeficientes?
+</div>
+
+# Mapa de decisión: síntoma, evidencia y acción
+
+| Evidencia | Qué investigar | Posible respuesta |
+|:--|:--|:--|
+| Curvatura en residuos | Forma funcional, interacciones, variables omitidas | Reformular la media condicional |
+| Varianza creciente | Proceso, gráficos, BP | LS + HC3 para inferencia; considerar ponderación |
+| Respuestas atípicas, colas pesadas | Calidad del dato, Cook, sensibilidad | LAD o Huber con diagnóstico de leverage |
+| Sensibilidad distribucional | Distribución de errores y objetivo inferencial | Método de regresión por rangos |
+| Predictores muy correlacionados | VIF, incertidumbre y estabilidad | Ridge con ajuste de penalización |
+| Información previa confiable | Procedencia y relevancia de la información | Regresión bayesiana |
+
+Un estimador resistente a residuos **no corrige automáticamente** una función de regresión mal especificada. La elección también depende de si queremos estimar una **media**, una **mediana**, predecir con precisión o expresar incertidumbre probabilística.
+
+# Actividad autónoma con mtcars
+
+La base **mtcars**, distribuida con R, permite transferir la rutina a observaciones no simuladas. La respuesta **mpg** mide millas por galón. Ajuste un modelo simple con **wt** (peso en miles de libras) y otro múltiple con **wt**, **hp** (potencia), **qsec** (segundos en un cuarto de milla) y **am** (transmisión).
+
+```{r actividad-mtcars}
+data("mtcars", package = "datasets")
+autos <- as.data.frame(mtcars)
+autos$am <- factor(autos$am, levels = c(0, 1),
+                   labels = c("Automatica", "Manual"))
+modelo_auto_simple <- lm(mpg ~ wt, data = autos)
+modelo_auto_multiple <- lm(mpg ~ wt + hp + qsec + am, data = autos)
+summary(modelo_auto_simple)
+summary(modelo_auto_multiple)
+```
+
+**Entrega breve (media página):**
+
+1. Interprete la pendiente **wt** en ambos modelos con unidades.
+2. Compare \(R^2\) con la lectura de los residuos. ¿Por qué uno no sustituye al otro?
+3. Revise los cuatro gráficos de **plot(modelo_auto_multiple)**.
+4. Identifique las filas con mayor distancia de Cook y explique si ameritan investigación.
+5. Compare inferencia clásica y HC3 con **comparar_inferencia(modelo_auto_multiple)**.
+6. Recomiende en cinco a siete líneas si mantendría LS o estudiaría una alternativa, citando evidencia.
+
+```{r actividad-codigo-sugerido, eval=FALSE}
+# Ejecute en la consola de RStudio o cambie eval=FALSE a TRUE.
+plot(modelo_auto_multiple)
+head(sort(cooks.distance(modelo_auto_multiple), decreasing = TRUE))
+comparar_inferencia(modelo_auto_multiple)
+prueba_bp_koenker(modelo_auto_multiple)
+```
+
+# Síntesis y pregunta de salida
+
+1. **Modelo:** ¿qué relación condicional postula la ecuación?
+2. **Criterio:** ¿qué magnitud optimiza el método?
+3. **Diagnóstico:** ¿qué problema concreto muestran los datos?
+4. **Decisión:** ¿cambiar la forma del modelo, su inferencia o sus estimadores?
+
+> **Pregunta de salida.** Dos regresiones tienen un \(R^2\) similar. Una presenta residuos aproximadamente homogéneos y baja influencia; la otra, heterocedasticidad e influencia marcada. ¿Por qué no poseen necesariamente la misma calidad estadística?
+
+## Fuentes y trazabilidad
+
+- Birkes, D. y Dodge, Y. (1993). *Alternative Methods of Regression*. Wiley. Capítulo 1, §§1.3–1.6; capítulo 2, §§2.1–2.3; capítulo 3, §3.3 para el criterio LS.
+- Scripts adjuntos: *Sesion_1_1_MAE_2_2026_3.R*, *Sesion_1_2_MAE_2_2026_3.R* y *Sesion_1_3_MAE_2_2026_3.R*.
+- Guía HTML adjunta: *Guia_Regresion_LS_Diagnostico_Metodos_Alternativos_V2_COMPILABLE.html*. De allí procede el diseño de las dos bases didácticas.
+
+<p class="smallnote">El análisis de países reproduce datos históricos del libro. Planta y logística son bases sintéticas con semillas fijadas. Los contrastes y umbrales diagnósticos requieren juicio estadístico sobre el contexto y el proceso de generación.</p>

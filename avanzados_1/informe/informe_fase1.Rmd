@@ -1,0 +1,595 @@
+---
+title: "¿Cuál es el precio justo? Nivel y dispersión geográfica de los precios mayoristas de alimentos en Colombia, 2024"
+subtitle: "Fase 1 --- Análisis exploratorio, pregunta de investigación y diseño del estudio"
+author: "Víctor Fabián Novoa Rojas --- Maestría en Inteligencia Artificial, Universidad de La Sabana"
+date: "`r paste(format(Sys.Date(), '%d'), 'de', c('enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre')[as.integer(format(Sys.Date(), '%m'))], 'de', format(Sys.Date(), '%Y'))`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    df_print: kable
+    fig_caption: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      fig.align = "center", out.width = "100%")
+```
+
+```{r datos, include=FALSE}
+# El informe vive en informe/ y lee los productos del analisis desde la raiz
+# del proyecto. Las rutas relativas con ".." funcionan igual al renderizar con
+# rmarkdown que al ejecutar los bloques de forma interactiva.
+RAIZ <- ".."
+source(file.path(RAIZ, "R", "00_utilidades.R"))
+
+reg <- readRDS(file.path(RAIZ, "datos", "precios_registro.rds"))
+pm  <- readRDS(file.path(RAIZ, "datos", "precios_producto_mes.rds"))
+pmv <- pm[pm$cv_valido, ]
+
+FIG <- function(n) file.path(RAIZ, "salidas", "figuras", paste0(n, ".png"))
+TAB <- function(n) read.csv2(file.path(RAIZ, "salidas", "tablas",
+                                       paste0(n, ".csv")),
+                             fileEncoding = "UTF-8", check.names = FALSE)
+
+mil <- function(x) formatC(x, format = "d", big.mark = ".", decimal.mark = ",")
+num <- function(x, d = 2) formatC(x, format = "f", digits = d, decimal.mark = ",")
+# El simbolo "<" pegado a un digito puede confundirse con una etiqueta HTML al
+# renderizar; se deja siempre separado por un espacio.
+pval <- function(p) if (p < 2e-16) "< 2e-16" else formatC(p, format = "e", digits = 2)
+
+cv_med   <- median(pmv$cv_pct)
+cv_ic    <- ic_media(pmv$cv_pct)
+r_pear   <- cor.test(pmv$log_precio, pmv$cv_pct)
+r_spear  <- cor(pmv$precio_mediano, pmv$cv_pct, method = "spearman")
+t_cv_g   <- TAB("06_cv_por_grupo")
+t_cor_g  <- TAB("09_correlaciones_nivel_dispersion")
+t_cuart  <- TAB("10_cv_por_cuartil_precio")
+t_plaza  <- TAB("07_brecha_por_tipo_plaza")
+t_region <- TAB("08_brecha_por_region")
+```
+
+---
+
+# Contexto y motivación
+
+En Colombia el precio que paga un hogar por un alimento se forma mucho antes de
+llegar al punto de venta: se define en la central de abastos o la plaza de mercado
+donde el producto se transa al por mayor. El DANE monitorea ese eslabón a través
+del **SIPSA** (Sistema de Información de Precios y Abastecimiento del Sector
+Agropecuario), que recoge cotizaciones diarias en decenas de mercados mayoristas
+del país y las publica agregadas por mes.
+
+La pregunta de fondo es vieja en economía y sigue abierta en el caso colombiano:
+si los mercados estuvieran perfectamente integrados, el precio de un mismo bien
+debería ser prácticamente el mismo en todo el territorio una vez descontados los
+costos de transporte --- es la llamada **ley de precio único**. En la práctica no
+ocurre: la geografía quebrada, el estado de las vías, la concentración de la
+intermediación y la perecibilidad de cada producto hacen que el mismo kilo de
+alimento valga cosas muy distintas según dónde se compre.
+
+Lo que este estudio agrega a esa discusión es una pregunta menos explorada: **no
+todos los alimentos se dispersan igual, y esa desigualdad parece depender del
+nivel de precio del propio producto**. Un bien barato y perecedero como el
+brócoli podría estar mucho más expuesto a la fragmentación territorial que un
+bien caro, estandarizado y fácil de transportar como la carne o un procesado.
+Contrastar esa intuición con datos es el objeto de este trabajo.
+
+# El conjunto de datos
+
+```{r ficha}
+data.frame(
+  Atributo = c("Fuente", "Cobertura temporal", "Unidad de observación",
+               "Registros", "Productos", "Mercados mayoristas",
+               "Ciudades / municipios", "Departamentos", "Grupos alimentarios",
+               "Valores faltantes", "Registros duplicados"),
+  Valor = c("SIPSA --- DANE, precios mayoristas mensuales",
+            "Enero a diciembre de 2024 (12 meses)",
+            "Producto x mercado x mes",
+            mil(nrow(reg)),
+            length(unique(reg$producto)),
+            length(unique(reg$mercado)),
+            length(unique(reg$ciudad)),
+            length(unique(reg$departamento)),
+            nlevels(reg$grupo),
+            sum(is.na(reg$precio_kg)),
+            sum(duplicated(reg[, c("fecha", "producto", "mercado")]))),
+  check.names = FALSE
+)
+```
+
+El archivo original trae **seis columnas**: mes, grupo alimentario, producto,
+código CPC, mercado y precio promedio por kilogramo. De ellas solo una es
+cuantitativa. Para poder responder una pregunta que involucre dos variables
+numéricas fue necesario **derivar indicadores a partir de la estructura del
+panel**, y enriquecer el campo `Mercado` --- que mezcla ciudad, departamento y
+nombre de plaza en un solo texto --- en variables geográficas e institucionales
+separadas. Ese trabajo está documentado en `R/01_carga_y_enriquecimiento.R`.
+
+## Calidad de los datos
+
+La base está completa en el sentido estricto: no hay valores faltantes ni
+registros duplicados en la llave `producto x mercado x mes`. Lo que sí existe es
+una **cobertura desbalanceada**, y esta es la restricción metodológica central
+del estudio:
+
+```{r cobertura}
+cob_prod <- tapply(reg$mercado, reg$producto, function(x) length(unique(x)))
+cob_mer  <- tapply(reg$producto, reg$mercado, function(x) length(unique(x)))
+data.frame(
+  Indicador = c("Mercados en que se cotiza un producto",
+                "Productos cotizados en un mercado",
+                "Celdas del panel completo teórico",
+                "Celdas efectivamente observadas"),
+  Mediana = c(median(cob_prod), median(cob_mer), "---", "---"),
+  Mínimo  = c(min(cob_prod), min(cob_mer), "---", "---"),
+  Máximo  = c(max(cob_prod), max(cob_mer), "---", "---"),
+  Total   = c("---", "---",
+              mil(349 * 80 * 12),
+              paste0(mil(nrow(reg)), " (",
+                     fmt_pct(100 * nrow(reg) / (349 * 80 * 12)), ")")),
+  check.names = FALSE
+)
+```
+
+El panel observado ocupa apenas el 16% del panel teórico. No es un error de
+captura: refleja que cada plaza cotiza la canasta que efectivamente se transa en
+ella. La consecuencia práctica es que **la dispersión intermercado solo es
+comparable cuando un producto se cotiza en un número razonable de plazas**; por
+eso el estudio fija un umbral mínimo de 5 mercados por par producto-mes, que
+conserva `r mil(nrow(pmv))` de los `r mil(nrow(pm))`
+pares disponibles (`r fmt_pct(100 * nrow(pmv) / nrow(pm))`).
+
+---
+
+# Análisis exploratorio de datos
+
+## La variable de precio está fuertemente sesgada
+
+```{r fig1, fig.cap="Figura 1. Distribución del precio mayorista por kilogramo en escala original y logarítmica."}
+knitr::include_graphics(FIG("01_distribucion_precio"))
+```
+
+```{r res-precio}
+TAB("03_resumen_precio_global")
+```
+
+El precio mediano nacional es de `r fmt_cop(median(reg$precio_kg))` por kilogramo,
+pero la media (`r fmt_cop(mean(reg$precio_kg))`) la duplica: la distribución tiene
+una **asimetría de `r num(asimetria(reg$precio_kg))`** y una curtosis de
+`r num(curtosis_exceso(reg$precio_kg), 1)`, propias de una variable de precios
+donde conviven tubérculos por menos de mil pesos el kilo y cortes de carne o
+procesados por encima de los cien mil.
+
+Esto no es un defecto de los datos sino una característica de la variable, y
+tiene dos implicaciones que el diseño del estudio debe asumir:
+
+1. **La media aritmética no es un buen resumen del "precio típico"**: se usará la
+   mediana como estadístico de posición y se reportará el rango intercuartílico.
+2. **Trabajar en escala logarítmica normaliza la variable.** Al aplicar
+   $\log_{10}$, la asimetría cae de `r num(asimetria(reg$precio_kg))` a
+   `r num(asimetria(reg$log_precio))`, prácticamente simétrica. El gráfico
+   cuantil-cuantil lo confirma:
+
+```{r fig2, fig.cap="Figura 2. Gráfico cuantil-cuantil normal antes y después de la transformación logarítmica."}
+knitr::include_graphics(FIG("02_qqplot_precio"))
+```
+
+Bajo la regla de Tukey, el `r fmt_pct(100 * mean(reg$precio_kg > limites_tukey(reg$precio_kg)[2]))`
+de los registros sería "atípico" en escala original. Son productos legítimamente
+caros, no errores; **no se eliminan**, se analizan en escala logarítmica o
+comparándolos dentro de su propio grupo alimentario.
+
+## El precio depende fuertemente del grupo alimentario
+
+```{r fig4, fig.cap="Figura 3. Nivel de precio por grupo alimentario (escala logarítmica)."}
+knitr::include_graphics(FIG("04_precio_por_grupo"))
+```
+
+```{r tab-grupo}
+t <- TAB("05_precio_por_grupo")
+t[, c("grupo", "n", "mediana", "q1", "q3", "cv_pct")]
+```
+
+Entre el grupo más caro y el más barato hay exactamente **un orden de magnitud**:
+la mediana de carnes es `r num(median(reg$precio_kg[reg$grupo == "CARNES"]) / median(reg$precio_kg[reg$grupo == "TUBERCULOS, RAICES Y PLATANOS"]), 1)`
+veces la de tubérculos, raíces y plátanos. Dos
+grupos merecen atención especial porque su caja es anormalmente ancha:
+
+- **Lácteos y huevos** mezcla en una sola categoría el huevo (entre 341 y 627
+  COP/kg) y los quesos (mediana cercana a 19.000 COP/kg).
+- **Procesados** reúne desde panela hasta productos de valor agregado alto.
+
+Esta heterogeneidad interna es exactamente la razón por la que el grupo
+alimentario entra al estudio **como variable explicativa**, y no como un simple
+descriptor.
+
+## La dispersión geográfica: la segunda variable cuantitativa
+
+Para medir cuánto varía el precio de un mismo producto entre mercados se calcula,
+para cada par **producto x mes**, el **coeficiente de variación intermercado**:
+
+$$CV_{p,t} \;=\; 100 \times \frac{s_{p,t}}{\bar{x}_{p,t}}$$
+
+donde $\bar{x}_{p,t}$ y $s_{p,t}$ son la media y la desviación estándar del precio
+del producto $p$ en el mes $t$ a través de los mercados que lo cotizan. Al ser
+una medida **relativa**, permite comparar la dispersión de la papa con la del
+salmón sin que el nivel de precio contamine la comparación --- que es justamente
+lo que se quiere poner a prueba.
+
+```{r fig3, fig.cap="Figura 4. Distribución del coeficiente de variación intermercado."}
+knitr::include_graphics(FIG("03_distribucion_cv"))
+```
+
+```{r res-cv}
+TAB("04_resumen_cv_global")
+```
+
+El hallazgo descriptivo es contundente: en el par producto-mes típico el precio
+mayorista se desvía **`r fmt_pct(cv_med)`** de su media nacional según el mercado
+donde se cotice, y el producto mediano se transa a un precio
+**`r num(median(pmv$precio_max / pmv$precio_min))` veces más alto** en la
+plaza más cara que en la más barata del mismo mes. La ley de precio único no se
+cumple ni de lejos.
+
+## La dispersión tampoco es uniforme entre grupos
+
+```{r fig5, fig.cap="Figura 5. Dispersión geográfica del precio por grupo alimentario."}
+knitr::include_graphics(FIG("05_cv_por_grupo"))
+```
+
+```{r tab-cv-grupo}
+t_cv_g[, c("grupo", "n", "media", "ic95_inf", "ic95_sup", "mediana", "q1", "q3")]
+```
+
+Verduras y hortalizas dispersa
+`r num(t_cv_g$mediana[1] / t_cv_g$mediana[nrow(t_cv_g)], 1)` veces más que
+lácteos y huevos. Los intervalos de confianza al 95% para la media de cada grupo
+**no se traslapan** entre los extremos, lo que anticipa que la diferencia no es
+producto del azar muestral.
+
+## Nivel frente a dispersión: el hallazgo central
+
+```{r fig7, fig.cap="Figura 6. Relación entre el nivel de precio y la dispersión geográfica, por grupo alimentario."}
+knitr::include_graphics(FIG("07_nivel_vs_dispersion"))
+```
+
+La relación entre ambas cuantitativas es **negativa y moderada**:
+
+```{r cor-tab}
+data.frame(
+  Medida = c("Pearson sobre log10(precio)", "Spearman sobre precio"),
+  Coeficiente = c(num(unname(r_pear$estimate), 3), num(r_spear, 3)),
+  `IC 95%` = c(paste0("[", num(r_pear$conf.int[1], 3), " ; ",
+                      num(r_pear$conf.int[2], 3), "]"), "---"),
+  `valor p` = c(pval(r_pear$p.value), "< 2e-16"),
+  check.names = FALSE
+)
+```
+
+Leído por cuartiles de precio, sin suponer linealidad, el patrón es monótono:
+
+```{r tab-cuartil}
+t_cuart[, c("cuartil", "n", "media", "mediana", "desv_est")]
+```
+
+**Los alimentos más baratos son los que más varían de precio entre territorios.**
+El cuartil más económico casi duplica la dispersión del cuartil más caro. Es un
+resultado con sentido económico: los productos baratos suelen ser perecederos, de
+bajo valor por kilo y, por lo tanto, con un costo de transporte que pesa mucho
+sobre su precio final, lo que desincentiva el arbitraje entre plazas distantes.
+
+Pero el gráfico revela algo más interesante todavía: **la relación se invierte
+dentro de al menos un grupo.**
+
+```{r tab-cor-grupo}
+t_cor_g
+```
+
+En lácteos y huevos la correlación es **positiva y fuerte**
+(`r num(t_cor_g$spearman[t_cor_g$grupo == "LACTEOS Y HUEVOS"], 3)` de Spearman), mientras
+que en frutas es la más negativa de todas
+(`r num(t_cor_g$spearman[t_cor_g$grupo == "FRUTAS"], 3)`). Es decir, el signo de la
+relación depende del grupo: hay un **efecto de interacción**, no un efecto único.
+Este es precisamente el tipo de estructura que justifica un estudio que combine
+las dos cuantitativas con la variable categórica en lugar de analizarlas por
+separado.
+
+```{r fig8, fig.cap="Figura 7. Productos con mayor y menor dispersión geográfica de precio."}
+knitr::include_graphics(FIG("08_productos_extremos"))
+```
+
+## Dónde se compra también importa
+
+```{r fig6, fig.cap="Figura 8. Brecha porcentual frente al precio nacional según tipo de plaza y región."}
+knitr::include_graphics(FIG("06_brecha_plaza_region"))
+```
+
+```{r tab-plaza}
+t_plaza[, c("tipo_plaza", "n", "media", "mediana", "q1", "q3")]
+```
+
+```{r tab-region}
+t_region[, c("region", "n", "media", "mediana", "q1", "q3")]
+```
+
+Los **mercados de municipio productor** cotizan sistemáticamente por debajo de la
+referencia nacional y las **plazas urbanas** por encima: la diferencia entre
+comprar en el origen y comprar en destino es visible en los datos. En el eje
+regional, **Amazonía y Orinoquía pagan sobreprecios medianos de
+`r fmt_pct(t_region$mediana[t_region$region == "Amazonía"])` y
+`r fmt_pct(t_region$mediana[t_region$region == "Orinoquía"])`** frente a las
+regiones centrales --- el costo de la distancia y de la conectividad vial.
+
+## Comportamiento a lo largo del año
+
+```{r fig9, fig.cap="Figura 9. Evolución mensual del precio mediano por grupo y de la dispersión geográfica."}
+knitr::include_graphics(FIG("09_evolucion_mensual"))
+```
+
+Los precios tienen **estacionalidad marcada y específica por grupo** (tubérculos
+y verduras con picos de más del 40% sobre enero hacia mitad de año), pero la
+**dispersión geográfica es notablemente estable**: el CV mediano mensual se mueve
+en una banda estrecha alrededor de `r fmt_pct(cv_med)` durante los doce meses.
+Esto sugiere que la fragmentación del mercado es **estructural**, no coyuntural,
+y refuerza la validez de estudiarla con el año completo.
+
+---
+
+# Pregunta de investigación
+
+> **¿En qué medida el nivel de precio de un alimento explica la dispersión
+> geográfica de su precio entre los mercados mayoristas de Colombia durante 2024,
+> y cómo se modifica esa relación según el grupo alimentario y el tipo de plaza
+> en que se transa?**
+
+## Por qué es una buena pregunta estadística
+
+| Criterio | Cómo lo cumple |
+|---|---|
+| **Requiere recolectar y analizar datos** | No se puede responder por razonamiento: exige calcular dispersiones sobre `r mil(nrow(reg))` cotizaciones en 80 mercados. |
+| **Involucra variabilidad** | La variabilidad *es* el objeto de estudio. El CV intermercado va de `r fmt_pct(min(pmv$cv_pct))` a `r fmt_pct(max(pmv$cv_pct))`. |
+| **No es cerrada** | La respuesta es una magnitud con intervalo de confianza y un conjunto de contrastes por categoría, no un sí/no. |
+| **Claridad** | Cada término está operacionalizado: "nivel de precio" = COP/kg; "dispersión" = CV intermercado; "grupo" y "tipo de plaza" tienen categorías definidas y exhaustivas. |
+| **Viabilidad** | Los datos están disponibles, limpios y ya procesados; el análisis corre con R base en segundos. |
+| **Medición cuantitativa** | Ambos conceptos centrales son numéricos y continuos, y admiten correlación, ANOVA y estimación por intervalos. |
+
+## Preguntas específicas derivadas
+
+1. ¿Cuál es el precio mayorista promedio de los alimentos en Colombia en 2024 y
+   con qué precisión puede estimarse por grupo alimentario?
+2. ¿Cuánta dispersión geográfica de precio existe y qué intervalo de confianza
+   tiene el CV medio nacional?
+3. ¿Existe asociación significativa entre el nivel de precio y la dispersión
+   geográfica? ¿Cuál es su signo y su magnitud?
+4. ¿Difiere esa asociación entre grupos alimentarios? ¿Es significativa la
+   interacción?
+5. ¿Las centrales de abastos ofrecen precios significativamente distintos de los
+   de las plazas urbanas y los mercados de municipio productor?
+
+---
+
+# Definición de las variables
+
+## Variables cuantitativas
+
+| Variable | Definición | Unidad | Nivel | Origen |
+|---|---|---|---|---|
+| `precio_kg` | Precio promedio mensual por kilogramo del producto en el mercado | COP/kg | Continua, razón | Original |
+| `cv_pct` | Coeficiente de variación del precio del producto entre mercados, en el mes | % | Continua, razón | **Derivada** |
+| `brecha_pct` | Desviación porcentual del precio de la plaza frente a la mediana nacional del producto en ese mes | % | Continua, intervalo | **Derivada** |
+| `n_mercados` | Número de mercados que cotizan el producto en el mes | conteo | Discreta, razón | **Derivada** |
+
+Las dos primeras son las **variables centrales** de la pregunta: `precio_kg`
+mide el *nivel* y `cv_pct` la *dispersión*. Las otras dos permiten controlar y
+matizar los resultados.
+
+## Variables cualitativas
+
+| Variable | Definición | Categorías | Origen |
+|---|---|---|---|
+| `grupo` | Grupo alimentario | `r nlevels(reg$grupo)` (carnes, frutas, verduras, ...) | Original |
+| `tipo_plaza` | Naturaleza institucional del mercado | `r nlevels(reg$tipo_plaza)` (central de abastos, plaza urbana, municipio productor, frigorífico) | **Derivada** |
+| `region` | Región natural del país | `r nlevels(reg$region)` (Andina, Caribe, Pacífica, Orinoquía, Amazonía) | **Derivada** |
+| `mes` | Mes de cotización | 12 | Original |
+| `producto` | Producto específico | `r length(unique(reg$producto))` | Original |
+
+Las variables derivadas se construyeron descomponiendo el campo `Mercado`, que
+combina ciudad, departamento y nombre de plaza en una sola cadena de texto. El
+criterio de clasificación del tipo de plaza y la asignación regional están
+documentados en el script de carga y en el diccionario
+`salidas/tablas/00_diccionario_mercados.csv`, de modo que la codificación sea
+auditable y reproducible.
+
+## Unidades de análisis
+
+El estudio trabaja en dos niveles, y es importante no confundirlos:
+
+- **Nivel registro** (`r mil(nrow(reg))` observaciones):
+  producto x mercado x mes. Es la unidad para analizar `precio_kg` y `brecha_pct`.
+- **Nivel producto-mes** (`r mil(nrow(pmv))` observaciones con
+  al menos 5 mercados): es la unidad para analizar `cv_pct`, porque la dispersión
+  es una propiedad del conjunto de mercados, no de una cotización individual.
+
+---
+
+# Justificación del estudio
+
+## ¿Por qué es interesante el fenómeno?
+
+Porque pone a prueba un supuesto teórico con datos reales. La ley de precio único
+predice convergencia; los datos muestran una desviación mediana de
+`r fmt_pct(cv_med)` que se mantiene estable los doce meses del año. Y la
+pregunta sobre *qué tipo de alimento* se dispersa más no tiene respuesta obvia:
+la intuición de que "los productos caros varían más" resulta ser **exactamente
+al revés**, y además se invierte dentro de algunos grupos. Un fenómeno que
+contradice la intuición y muestra heterogeneidad estructurada es, por definición,
+un buen objeto de estudio estadístico.
+
+## ¿A quién puede beneficiar conocer estos datos?
+
+- **Hogares y consumidores.** Saber que el mismo alimento cuesta en mediana 1,75
+  veces más en una plaza que en otra, y que las verduras son el grupo donde más
+  se paga por comprar en el lugar equivocado, es información accionable.
+- **Pequeños productores.** Los mercados de municipio productor cotizan por
+  debajo de la referencia nacional; cuantificar esa brecha es cuantificar el
+  margen que se queda en la intermediación.
+- **Gestores de política pública** (DANE, Ministerio de Agricultura, alcaldías).
+  Identificar qué productos y qué regiones concentran la fragmentación permite
+  priorizar inversión en vías terciarias, centros de acopio y sistemas de
+  información de precios.
+- **Comerciantes y operadores logísticos.** La dispersión es, en términos
+  operativos, una señal de oportunidad de arbitraje y de riesgo de inventario.
+- **Programas de compras públicas** (alimentación escolar, bancos de alimentos),
+  que pueden usar un precio de referencia estadísticamente fundamentado en lugar
+  de una cotización puntual.
+
+## ¿Qué se puede aprender?
+
+Una caracterización cuantificada y con medida de incertidumbre de la integración
+del mercado alimentario colombiano: cuánta dispersión hay, qué la estructura, qué
+productos y territorios están más expuestos, y si las diferencias observadas
+entre grupos y plazas resisten un contraste formal o son ruido muestral.
+
+## ¿Qué decisiones podrían tomarse?
+
+| Actor | Decisión informada por el estudio |
+|---|---|
+| Comprador institucional | Fijar un precio de referencia con intervalo de confianza en vez de una cotización única |
+| Planificador de infraestructura | Priorizar corredores hacia las regiones con mayor sobreprecio (Amazonía, Orinoquía) |
+| Productor | Elegir plaza de venta comparando la brecha típica por tipo de mercado |
+| Analista de riesgo / abastecimiento | Anticipar en qué grupos la variabilidad de precio hace más costoso el error de aprovisionamiento |
+| Diseñador de política de información | Focalizar la difusión de precios en los productos donde la dispersión indica mayor asimetría de información |
+
+## Validez del estudio en su contexto
+
+El estudio es válido para el **eslabón mayorista** del sistema alimentario
+colombiano en 2024, y esa delimitación debe hacerse explícita:
+
+- **Validez de la fuente.** SIPSA es el sistema oficial de información de precios
+  agropecuarios del DANE, con metodología pública y recolección continua en las
+  plazas. No se trata de una muestra de conveniencia.
+- **Cobertura.** 80 mercados en 24 departamentos y las cinco regiones naturales;
+  incluye las principales centrales de abastos del país, que concentran la mayor
+  parte del volumen transado.
+- **Comparabilidad.** Todos los precios están expresados en la misma unidad
+  (COP por kilogramo), lo que hace comparables productos vendidos originalmente
+  por unidad, atado o bulto.
+- **Limitaciones reconocidas.** (i) No es una muestra probabilística de plazas,
+  por lo que la inferencia se interpreta como válida para el universo de mercados
+  monitoreados y no para *todo* mercado del país; (ii) el precio está en términos
+  nominales, sin deflactar; (iii) el dato es un promedio mensual, de modo que se
+  pierde la volatilidad intramensual; (iv) no se observan volúmenes transados, lo
+  que impide ponderar por importancia económica; (v) la clasificación de tipo de
+  plaza es una construcción propia a partir del nombre del mercado y, como toda
+  codificación, admite discusión --- por eso se publica el diccionario completo.
+
+---
+
+# Objetivos del estudio
+
+## Objetivo general
+
+**Analizar** la relación entre el nivel de precio de los alimentos y la dispersión
+geográfica de sus precios en los mercados mayoristas de Colombia durante 2024,
+**determinando** si dicha relación se modifica según el grupo alimentario y el
+tipo de plaza de comercialización.
+
+## Objetivos específicos
+
+1. **Estimar**, mediante intervalos de confianza al 95%, el precio mayorista
+   promedio por kilogramo y el coeficiente de variación intermercado medio, tanto
+   a nivel nacional como por grupo alimentario.
+
+2. **Determinar** la existencia, el signo y la magnitud de la asociación entre el
+   nivel de precio y la dispersión geográfica, y **comparar** si esa asociación
+   difiere significativamente entre los ocho grupos alimentarios.
+
+3. **Comparar** la brecha de precio frente a la referencia nacional entre los
+   distintos tipos de plaza y regiones del país, identificando en qué categorías
+   las diferencias son estadísticamente significativas.
+
+---
+
+# Anticipo de la fase inferencial
+
+El análisis exploratorio orienta las técnicas de la siguiente fase y advierte sus
+supuestos:
+
+```{r inferencia}
+kw  <- kruskal.test(cv_pct ~ grupo, data = pmv)
+av  <- summary(aov(cv_pct ~ grupo, data = pmv))[[1]]
+kw2 <- kruskal.test(brecha_pct ~ tipo_plaza, data = reg)
+data.frame(
+  Contraste = c("Kruskal-Wallis: CV ~ grupo alimentario",
+                "ANOVA de un factor: CV ~ grupo alimentario",
+                "Kruskal-Wallis: brecha ~ tipo de plaza",
+                "IC 95% del CV intermercado medio"),
+  Estadístico = c(paste0("H = ", num(unname(kw$statistic), 1)),
+                  paste0("F = ", num(av[1, 4], 1),
+                         " (eta cuadrado = ", num(av[1, 2] / sum(av[, 2]), 3), ")"),
+                  paste0("H = ", num(unname(kw2$statistic), 1)),
+                  fmt_pct(cv_ic["media"], 2)),
+  Resultado = c(paste0("p ", pval(kw$p.value)),
+                paste0("p ", pval(av[1, 5])),
+                paste0("p ", pval(kw2$p.value)),
+                paste0("[", fmt_pct(cv_ic["inferior"], 2), " ; ",
+                       fmt_pct(cv_ic["superior"], 2), "]")),
+  check.names = FALSE
+)
+```
+
+Estos contrastes son **preliminares** y se reportan aquí solo como evidencia de
+que la pregunta es abordable, no como resultados definitivos. Tres advertencias
+metodológicas quedan registradas para la fase siguiente:
+
+- **La normalidad no se cumple en escala original.** Toda prueba paramétrica
+  sobre `precio_kg` debe hacerse sobre su logaritmo o acompañarse de su
+  equivalente no paramétrico, como se hizo arriba.
+- **Las observaciones no son independientes.** El mismo producto aparece doce
+  veces (una por mes) y el mismo mercado cientos de veces. La fase inferencial
+  debe considerar esta estructura anidada; ignorarla subestimaría los errores
+  estándar.
+- **Los tamaños muestrales son muy grandes**, de modo que casi cualquier
+  diferencia resultará significativa. Por eso se reportan **tamaños de efecto**
+  (eta cuadrado, coeficientes de correlación) junto a los valores p.
+
+---
+
+# Reproducibilidad
+
+Todo el análisis corre con **R base**, sin paquetes externos, para que sea
+reproducible en cualquier instalación:
+
+```
+proyecto/
+├── datos/            mensual_24.csv + bases procesadas (.rds)
+├── R/
+│   ├── 00_utilidades.R                funciones auxiliares y estilo gráfico
+│   ├── 01_carga_y_enriquecimiento.R   lectura, depuración, variables derivadas
+│   └── 02_analisis_exploratorio.R     AED completo
+├── salidas/
+│   ├── figuras/      9 figuras en PNG
+│   ├── tablas/       12 tablas en CSV
+│   └── log_aed.txt   salida de consola del análisis
+├── informe/          este documento
+└── ejecutar_todo.R   reproduce el pipeline completo
+```
+
+Para reproducirlo: abrir el proyecto en Visual Studio Code y ejecutar
+`source("ejecutar_todo.R")` desde la raíz.
+
+---
+
+# Referencias
+
+- DANE. *Sistema de Información de Precios y Abastecimiento del Sector
+  Agropecuario (SIPSA) --- Componente de Precios Mayoristas.* Bogotá: DANE.
+  Microdatos disponibles en <https://microdatos.dane.gov.co/index.php/catalog/776>
+- DANE. *Boletín técnico SIPSA --- precios mayoristas.* Bogotá: DANE, 2024.
+- Rodríguez Revilla, R. (2020). *Introducción a la microeconometría básica con
+  aplicaciones.* Bogotá: Siglo del Hombre Editores.
+- Tukey, J. W. (1977). *Exploratory Data Analysis.* Reading: Addison-Wesley.

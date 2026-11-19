@@ -1,0 +1,2 @@
+"variable","n","media","mediana","clase_modal","minimo","maximo","rango","desv_estandar","varianza","q1","q3","IQR","asimetria","exceso_curtosis","atipicos_1_5_IQR"
+"precio_promedio tomate de arbol (COP)",39,1639.39017094017,1702.23333333333,"(1.66e+03,1.79e+03]",1144.13333333333,2054.6,910.466666666666,233.134756532523,54351.8147034788,1458.10833333333,1820.91666666667,362.808333333333,-0.439993309044515,-0.742691784119658,0

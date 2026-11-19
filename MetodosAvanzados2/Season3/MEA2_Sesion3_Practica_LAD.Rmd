@@ -1,0 +1,680 @@
+---
+title: "MEA2 · Sesión 3 | Regresión por mínimas desviaciones absolutas"
+subtitle: "Laboratorio guiado en RStudio · estimación, inferencia e interpretación"
+author: "Material docente para Métodos Alternativos de Regresión"
+date: "`r format(Sys.Date(), '%d de %B de %Y')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float:
+      collapsed: false
+    number_sections: true
+    code_folding: show
+    highlight: tango
+    df_print: paged
+    mathjax: default
+  pdf_document:
+    toc: true
+    number_sections: true
+lang: es
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, warning = FALSE, message = FALSE,
+  fig.width = 9, fig.height = 5.1,
+  fig.align = "center", dpi = 135,
+  dev = if (knitr::is_html_output()) "svg" else "pdf"
+)
+options(scipen = 5, digits = 5)
+set.seed(2026)
+```
+
+<style>
+body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; }
+h1, h2 { color: #233A85; }
+h3 { color: #0E8A96; }
+blockquote { border-left: 5px solid #F4A13D; background:#FFF8EA; padding: 12px 18px; }
+.pregunta { background:#F2F8FD; border-left:5px solid #0FA8B5; padding:12px 18px; margin:17px 0; }
+.solucion { background:#F1F8F2; border-left:5px solid #24A46D; padding:12px 18px; margin:17px 0; }
+</style>
+
+> **Guía comentada del docente.** Todos los ejercicios y preguntas de esta
+> práctica incluyen sus respuestas, calculadas a partir de los datos cargados.
+> Las cifras de las respuestas se actualizan al compilar el archivo.
+
+**Propósito.** Comprender y estimar modelos LAD de regresión simple y múltiple,
+construir intervalos de confianza, contrastar hipótesis e interpretar
+cuidadosamente los efectos de predictores numéricos y categóricos.
+
+**Duración sugerida:** 95–110 minutos. La exposición teórica se encuentra en
+la presentación y el documento de apoyo de esta misma sesión.
+
+# Preparación de RStudio
+
+En la consola, y **solo una vez** por equipo, instalar los paquetes requeridos:
+
+```r
+install.packages(c("rmarkdown", "knitr", "ggplot2", "quantreg", "robustbase", "AER"))
+```
+
+Después, abrir este archivo en RStudio y pulsar **Knit**. Los datos llegan
+directamente con los paquetes. No se descargan archivos CSV, no se requieren
+credenciales ni rutas locales. La primera compilación puede tardar un poco por
+las réplicas bootstrap. Se recomienda R actualizado y acceso a CRAN solo
+para instalar los paquetes por primera vez.
+
+```{r paquetes}
+necesarios <- c("ggplot2", "quantreg", "robustbase", "AER")
+ausentes <- necesarios[!vapply(necesarios, requireNamespace,
+                               quietly = TRUE, FUN.VALUE = logical(1))]
+if (length(ausentes) > 0) {
+  stop("Faltan paquetes: ", paste(ausentes, collapse = ", "),
+       ". Instálelos antes de compilar con install.packages().")
+}
+library(ggplot2)
+library(quantreg)
+
+tema_lad <- theme_minimal(base_size = 13) +
+  theme(plot.title = element_text(face = "bold", color = "#263C82"),
+        plot.subtitle = element_text(color = "#52627D"),
+        axis.title = element_text(color = "#263C82"),
+        panel.grid.minor = element_blank(),
+        legend.position = "bottom")
+
+# Tabla de inferencia bootstrap con intervalos normales aproximados.
+tabla_inferencia <- function(ajuste, B = 499) {
+  s <- summary(ajuste, se = "boot", R = B, covariance = TRUE)
+  est <- coef(ajuste)
+  se <- as.numeric(s$coefficients[, 2])
+  res <- data.frame(
+    Coeficiente = names(est),
+    Estimacion = as.numeric(est),
+    EE_bootstrap = se,
+    IC95_inf = as.numeric(est) - qnorm(.975) * se,
+    IC95_sup = as.numeric(est) + qnorm(.975) * se,
+    row.names = NULL, check.names = FALSE
+  )
+  list(tabla = res, resumen = s)
+}
+
+veredicto_ic <- function(inf, sup) {
+  if (is.finite(inf) && is.finite(sup) &&
+      (inf > 0 || sup < 0)) "excluye 0" else "incluye 0"
+}
+
+redondea <- function(x, digitos = 3) {
+  format(round(x, digitos), nsmall = digitos, trim = TRUE)
+}
+```
+
+## Recordatorio matemático: ¿qué optimiza LAD?
+
+Para observaciones independientes \((x_i,y_i)\) y un modelo lineal de regresión
+\(m(x_i;\boldsymbol\beta) = \beta_0+\sum_{j=1}^{p}\beta_j x_{ij}\),
+la regresión LAD estima
+
+\[
+\widehat{\boldsymbol\beta}_{\rm LAD}
+\in \underset{\boldsymbol\beta}{\operatorname{arg\,min}}
+\sum_{i=1}^{n}\left|y_i-\beta_0-
+\sum_{j=1}^{p}\beta_j x_{ij}\right|.
+\]
+
+El mismo problema es una regresión cuantílica con \(\tau=0.5\):
+
+\[
+Q_{0.5}(Y\mid X=x)=\operatorname{Med}(Y\mid X=x)
+\approx \beta_0+\sum_{j=1}^{p}\beta_jx_j.
+\]
+
+En `quantreg`, `rq(..., tau = 0.5)` calcula el estimador LAD. En cambio,
+`lm()` minimiza la suma de cuadrados y se interpreta habitualmente como
+un modelo de la media condicional, bajo los supuestos pertinentes.
+
+**Advertencia de inferencia:** los intervalos de confianza y pruebas
+bootstrap que usaremos son aproximados y se interpretan en el marco de
+observaciones independientes y un modelo razonablemente especificado.
+El método LAD no protege automáticamente frente a observaciones de alta
+palanca ni corrige sesgos por omisión de variables.
+
+# Caso I · Astronomía: estrellas del cúmulo CYG OB1
+
+**Pregunta científica.** ¿Cómo cambia la luminosidad *mediana* de las estrellas
+según su temperatura superficial?
+
+La base `robustbase::starsCYG` tiene 47 estrellas. Registra el logaritmo de
+la temperatura efectiva (`log.Te`) y el logaritmo de la luminosidad
+(`log.light`). El conjunto contiene cuatro estrellas gigantes que se apartan
+de la secuencia principal. Son las observaciones 11, 20, 30 y 34, según la
+documentación del paquete.
+
+```{r estrellas-carga}
+data("starsCYG", package = "robustbase")
+estrellas <- starsCYG
+estrellas$id <- seq_len(nrow(estrellas))
+estrellas$grupo <- ifelse(estrellas$id %in% c(11, 20, 30, 34),
+                         "Estrellas gigantes", "Secuencia principal")
+stopifnot(nrow(estrellas) == 47L,
+          all(c("log.Te", "log.light") %in% names(estrellas)))
+knitr::kable(head(estrellas, 8), digits = 3,
+             caption = "Primeras observaciones del cúmulo")
+summary(estrellas[c("log.Te", "log.light")])
+table(estrellas$grupo)
+```
+
+## Observación visual antes de ajustar modelos
+
+```{r estrellas-exploracion, fig.cap="Relación entre temperatura superficial y luminosidad. El eje X se presenta creciente para facilitar la lectura de la pendiente."}
+ggplot(estrellas, aes(x = log.Te, y = log.light, color = grupo)) +
+  geom_point(size = 3.3, alpha = .90) +
+  scale_color_manual(values = c("Estrellas gigantes" = "#F16D6D",
+                                "Secuencia principal" = "#377BC7")) +
+  labs(title = "¿Una sola recta describe todas las estrellas?",
+       subtitle = "Los cuatro objetos gigantes forman un grupo físicamente distinto",
+       x = "log(temperatura efectiva)", y = "log(luminosidad)",
+       color = "Población") + tema_lad
+```
+
+<div class="pregunta"><strong>Actividad 1.</strong> Identifique la variable de
+respuesta, la explicativa y las observaciones que podrían cambiar la pendiente
+de mínimos cuadrados. ¿Sería correcto eliminarlas automáticamente?</div>
+
+<div class="solucion"><strong>Respuesta razonada.</strong> La respuesta es
+<code>log.light</code>; la explicativa es <code>log.Te</code>. Los índices 11,
+20, 30 y 34 corresponden al grupo de estrellas gigantes. Merecen un análisis
+de sensibilidad, pero no deben eliminarse automáticamente: son observaciones
+astronómicas reales y pueden representar una subpoblación relevante. LAD
+reduce el peso de residuos verticales grandes, pero no resuelve por sí sola
+una mezcla de poblaciones ni los problemas de alta palanca.</div>
+
+## Estimación de la recta LS y de la recta LAD
+
+\[
+\widehat{Q}_{0.5}(\texttt{log.light}\mid\texttt{log.Te}=x)
+=\widehat\beta_0+\widehat\beta_1x.
+\]
+
+```{r estrellas-modelos}
+ls_e  <- lm(log.light ~ log.Te, data = estrellas)
+lad_e <- quantreg::rq(log.light ~ log.Te, tau = .5, data = estrellas)
+
+coef_ls_e  <- coef(ls_e)
+coef_lad_e <- coef(lad_e)
+modelos_e <- data.frame(
+  Metodo = c("Mínimos cuadrados (LS)", "Desviaciones absolutas (LAD)"),
+  Intercepto = c(coef_ls_e[1], coef_lad_e[1]),
+  Pendiente  = c(coef_ls_e[2], coef_lad_e[2]),
+  row.names = NULL
+)
+knitr::kable(modelos_e, digits = 4,
+             caption = "Ecuaciones ajustadas al mismo conjunto de estrellas")
+```
+
+```{r estrellas-rectas, fig.cap="Las rectas se ajustan al mismo conjunto de datos. La diferencia visual invita a estudiar la función de pérdida y el efecto de los grupos."}
+ggplot(estrellas, aes(log.Te, log.light)) +
+  geom_point(aes(color = grupo), size = 3, alpha = .85) +
+  geom_abline(intercept = coef_ls_e[1], slope = coef_ls_e[2],
+              color = "#F16D6D", linewidth = 1.2, linetype = "dashed") +
+  geom_abline(intercept = coef_lad_e[1], slope = coef_lad_e[2],
+              color = "#0C9E98", linewidth = 1.4) +
+  scale_color_manual(values = c("Estrellas gigantes" = "#F4B646",
+                                "Secuencia principal" = "#5064BC")) +
+  labs(title = "Dos criterios de ajuste, dos rectas",
+       subtitle = "Rojo discontinuo: LS. Verde continuo: LAD (mediana)",
+       x = "log(temperatura efectiva)", y = "log(luminosidad)",
+       color = "Población") + tema_lad
+```
+
+**Interpretación automática de la pendiente LAD:** al aumentar
+`log.Te` en una unidad, el modelo estima un cambio de
+**`r redondea(unname(coef_lad_e[2]))` unidades en la mediana condicional
+de `log.light`**. Para un aumento de 0.1 unidades en la explicativa, el
+cambio estimado es `r redondea(.1 * unname(coef_lad_e[2]))` unidades.
+Esta es una asociación entre cantidades transformadas, no una afirmación
+causal. El intercepto se evalúa en `log.Te = 0`, fuera del dominio observado,
+por lo que no tiene interpretación astronómica directa.
+
+<div class="pregunta"><strong>Actividad 2.</strong> ¿Cuál de los dos métodos
+consigue el menor error absoluto total? ¿Y cuál consigue el menor error
+cuadrático total?</div>
+
+```{r estrellas-perdidas}
+perdidas <- data.frame(
+  Metodo = c("LS", "LAD"),
+  SAR = c(sum(abs(residuals(ls_e))), sum(abs(residuals(lad_e)))),
+  SCR = c(sum(residuals(ls_e)^2), sum(residuals(lad_e)^2))
+)
+knitr::kable(perdidas, digits = 3,
+             caption = "SAR: suma absoluta residual; SCR: suma cuadrática residual")
+```
+
+<div class="solucion"><strong>Respuesta.</strong> LAD minimiza SAR y LS
+minimiza SCR sobre este mismo conjunto de datos, porque así se definieron
+sus objetivos. La tabla comprueba el resultado. No se debe calificar a LAD
+como «mejor» por minimizar SAR ni a LS como «mejor» por minimizar SCR,
+pues cada procedimiento optimiza una pérdida diferente.</div>
+
+## Inferencia sobre la pendiente: intervalos y contraste
+
+Contrastamos \(H_0:\beta_1=0\) frente a
+\(H_1:\beta_1\neq 0\). Se construyen intervalos de confianza del 95 %
+usando errores estándar bootstrap y aproximación normal:
+
+\[
+\widehat\beta_j \pm 1.96\,\widehat{\mathrm{EE}}_{\mathrm{boot}}
+(\widehat\beta_j).
+\]
+
+```{r estrellas-inferencia}
+infer_e <- tabla_inferencia(lad_e, B = 499)
+knitr::kable(infer_e$tabla, digits = 4,
+             caption = "LAD: inferencia aproximada con 499 réplicas bootstrap")
+cat("Resumen completo de quantreg::summary(), que incluye estadísticos y p-valores:\n")
+print(infer_e$resumen)
+```
+
+```{r estrellas-rank, eval=FALSE}
+# Alternativa opcional: intervalos por inversión de pruebas de rangos.
+# En ciertos conjuntos pequeños pueden aparecer advertencias numéricas.
+summary(lad_e, se = "rank", alpha = .05)
+```
+
+<div class="pregunta"><strong>Actividad 3.</strong> Interprete el intervalo de
+la pendiente, explique el sentido de un p-valor y diga si se puede concluir
+causalidad.</div>
+
+<div class="solucion"><strong>Respuesta contextual.</strong> Para la
+pendiente LAD el intervalo obtenido
+`r paste0('[', redondea(infer_e$tabla$IC95_inf[2]), ', ', redondea(infer_e$tabla$IC95_sup[2]), ']')`
+**`r veredicto_ic(infer_e$tabla$IC95_inf[2], infer_e$tabla$IC95_sup[2])`**.
+Si excluye cero, encontramos evidencia estadística de una asociación entre
+temperatura y luminosidad medianas dentro del modelo. Un p-valor mide qué
+tan incompatibles son los datos con la hipótesis nula bajo los supuestos
+de la prueba; no mide la probabilidad de que la hipótesis sea verdadera.
+El estudio observacional no permite concluir causalidad.</div>
+
+## Sensibilidad a las cuatro estrellas gigantes
+
+```{r estrellas-sensibilidad}
+principal <- subset(estrellas, grupo == "Secuencia principal")
+ls_principal <- lm(log.light ~ log.Te, data = principal)
+lad_principal <- quantreg::rq(log.light ~ log.Te, tau = .5,
+                             data = principal)
+sensibilidad <- data.frame(
+  Metodo = c("LS", "LS", "LAD", "LAD"),
+  Datos = c("47 estrellas", "43 secuencia principal",
+            "47 estrellas", "43 secuencia principal"),
+  Pendiente = c(coef(ls_e)[2], coef(ls_principal)[2],
+                coef(lad_e)[2], coef(lad_principal)[2])
+)
+knitr::kable(sensibilidad, digits = 4,
+             caption = "Comparación descriptiva de sensibilidad por grupo")
+```
+
+<div class="pregunta"><strong>Actividad 4.</strong> Si cambia la pendiente
+al excluir gigantes, ¿se ha demostrado que las observaciones estaban mal
+registradas?</div>
+
+<div class="solucion"><strong>Respuesta.</strong> No. Se ha documentado
+sensibilidad del ajuste a la composición de la muestra. La explicación
+puede ser la presencia de un grupo astronómico distinto. Esta comparación
+no debe convertirse en una regla para eliminar registros. Se puede proponer
+como extensión un análisis separado por clase de estrella.</div>
+
+# Caso II · Economía laboral: salarios de 1985
+
+**Pregunta explicativa.** Al mantener constantes otras características
+observadas, ¿cómo cambia la mediana del salario por hora con la educación,
+la experiencia, el género y la afiliación sindical?
+
+El conjunto `AER::CPS1985` contiene 534 trabajadores en la encuesta
+estadounidense *Current Population Survey* de mayo de 1985. La variable
+`wage` se mide en **dólares por hora de 1985** y `experience` representa
+años de experiencia laboral potencial, no necesariamente real.
+
+```{r salarios-carga}
+data("CPS1985", package = "AER")
+salarios <- CPS1985
+salarios <- salarios[complete.cases(salarios[
+  c("wage", "education", "experience", "gender", "union")]), ]
+salarios <- salarios[salarios$wage > 0, ]
+salarios$gender <- factor(salarios$gender)
+salarios$union <- factor(salarios$union)
+# Fijamos grupos de referencia cuando sus niveles existen. Así las
+# etiquetas y la interpretación siempre concuerdan con la tabla de R.
+if ("female" %in% levels(salarios$gender))
+  salarios$gender <- relevel(salarios$gender, ref = "female")
+if ("no" %in% levels(salarios$union))
+  salarios$union <- relevel(salarios$union, ref = "no")
+ref_genero <- levels(salarios$gender)[1]
+ref_union <- levels(salarios$union)[1]
+
+knitr::kable(head(salarios[c("wage", "education", "experience",
+                             "gender", "union")]), digits = 2,
+             caption = "Variables usadas en el modelo de salarios")
+summary(salarios[c("wage", "education", "experience")])
+table(salarios$gender, salarios$union)
+cat("Referencias del modelo: género =", ref_genero,
+    "; sindicato =", ref_union, "\n")
+```
+
+## Lectura exploratoria y escala del problema
+
+```{r salarios-exploracion, fig.height=5.0}
+ggplot(salarios, aes(education, wage)) +
+  geom_point(aes(color = gender), alpha = .55, size = 1.9,
+             position = position_jitter(width = .17, height = 0)) +
+  geom_smooth(method = "lm", se = FALSE, color = "#F16D6D", linewidth = 1.2) +
+  labs(title = "Salario frente a años de educación",
+       subtitle = "La dispersión importa tanto como la tendencia central",
+       x = "Años de educación", y = "Salario por hora (USD de 1985)",
+       color = "Género") + tema_lad
+```
+
+```{r salarios-distribucion, fig.height=4.7}
+ggplot(salarios, aes(union, wage, fill = union)) +
+  geom_boxplot(width = .46, outlier.alpha = .45) +
+  geom_jitter(width = .13, alpha = .24, size = 1.0) +
+  scale_fill_manual(values = c("#50BEBB", "#F7AB62", "#6C77D6")) +
+  labs(title = "Distribución de salarios según afiliación sindical",
+       subtitle = "Comparación sin controles; no es un efecto causal",
+       x = "Condición sindical", y = "Salario por hora (USD de 1985)") +
+  tema_lad + theme(legend.position = "none")
+```
+
+<div class="pregunta"><strong>Actividad 5.</strong> ¿Por qué la diferencia
+entre los boxplots de `union` no equivale directamente al coeficiente de
+`union` en una regresión múltiple?</div>
+
+<div class="solucion"><strong>Respuesta.</strong> Los boxplots describen
+diferencias de distribución entre grupos sin controlar por educación,
+experiencia o género. El coeficiente de una variable categórica en el modelo
+múltiple describe una diferencia de mediana condicional manteniendo fijas
+las demás explicativas. Los resultados pueden diferir por composición
+distinta de los grupos.</div>
+
+## Modelo explicativo con predictores numéricos y factores
+
+\[
+\operatorname{Med}(\text{salario}\mid\mathbf X)
+=\beta_0+\beta_1\,\text{educación}
++\beta_2\,\text{experiencia}
++\beta_3\,\mathbb 1(\text{género}=g_1)
++\beta_4\,\mathbb 1(\text{sindicato}=u_1).
+\]
+
+Si un factor posee dos niveles, R codifica automáticamente uno como
+referencia y crea una variable indicadora igual a 1 para el nivel restante.
+El intercepto corresponde a la categoría de referencia de ambos factores
+cuando `education = experience = 0`. Esto puede encontrarse fuera de la
+región relevante de la muestra.
+
+```{r salarios-modelos}
+formula_wage <- wage ~ education + experience + gender + union
+ls_w <- lm(formula_wage, data = salarios)
+lad_w <- quantreg::rq(formula_wage, tau = .5, data = salarios)
+
+comparacion_coef <- merge(
+  data.frame(Termino = names(coef(ls_w)), LS = unname(coef(ls_w))),
+  data.frame(Termino = names(coef(lad_w)), LAD = unname(coef(lad_w))),
+  by = "Termino", sort = FALSE
+)
+knitr::kable(comparacion_coef, digits = 4,
+             caption = "Media condicional (LS) y mediana condicional (LAD)")
+```
+
+## Intervalos para cada coeficiente
+
+```{r salarios-inferencia}
+infer_w <- tabla_inferencia(lad_w, B = 499)
+knitr::kable(infer_w$tabla, digits = 4,
+             caption = "LAD: estimación, error bootstrap e IC 95% aproximado")
+print(infer_w$resumen)
+```
+
+### ¿Cómo leer los coeficientes numéricos?
+
+El coeficiente LAD de `education` es
+**`r redondea(unname(coef(lad_w)["education"]))` USD por hora**:
+por cada año adicional de educación, el modelo estima esa diferencia en
+la **mediana condicional** del salario, comparando personas con igual
+experiencia y las mismas categorías registradas de género y sindicato.
+Su IC aproximado al 95 % es
+**`r paste0('[', redondea(infer_w$tabla$IC95_inf[match('education', infer_w$tabla$Coeficiente)]), ', ', redondea(infer_w$tabla$IC95_sup[match('education', infer_w$tabla$Coeficiente)]), ']')`**.
+
+La estimación de `experience` es
+**`r redondea(unname(coef(lad_w)["experience"]))` USD por hora y año**,
+manteniendo constantes las demás explicativas. El término lineal supone
+que esta variación por año es constante; discutiremos esa simplificación
+al mirar los residuos.
+
+### ¿Cómo leer los coeficientes categóricos?
+
+```{r salarios-factores-interpretacion}
+coef_gender <- grep("^gender", names(coef(lad_w)), value = TRUE)
+coef_union  <- grep("^union", names(coef(lad_w)), value = TRUE)
+stopifnot(length(coef_gender) == 1L, length(coef_union) == 1L)
+cat("Referencia género:", ref_genero, "\n")
+cat("Contraste de género:", coef_gender,
+    "=", round(coef(lad_w)[coef_gender], 3), "USD/hora\n")
+cat("Referencia sindicato:", ref_union, "\n")
+cat("Contraste sindical:", coef_union,
+    "=", round(coef(lad_w)[coef_union], 3), "USD/hora\n")
+```
+
+**Género.** El coeficiente `r coef_gender` vale
+**`r redondea(unname(coef(lad_w)[coef_gender]))` USD por hora**.
+Compara la mediana salarial estimada de la categoría codificada en
+`r coef_gender` respecto a la referencia **`r ref_genero`**,
+para personas con la misma educación, experiencia y situación sindical.
+Si es negativo, el grupo indicado tiene una mediana condicional menor;
+si es positivo, mayor. Es una **brecha ajustada descriptiva**, no un
+efecto causal del género.
+
+**Sindicato.** El coeficiente `r coef_union` vale
+**`r redondea(unname(coef(lad_w)[coef_union]))` USD por hora**.
+Compara la categoría sindical codificada con **`r ref_union`**,
+manteniendo constantes educación, experiencia y género. Una asociación
+condicional puede reflejar selección en empleos o sectores que el modelo
+no observa. No se interpreta automáticamente como efecto de pertenecer
+a un sindicato.
+
+<div class="pregunta"><strong>Actividad 6.</strong> Formule e interprete
+la hipótesis nula sobre educación y la de la categoría sindical. ¿Qué se
+mantiene constante al interpretar una variable explicativa?</div>
+
+<div class="solucion"><strong>Respuesta.</strong> Para educación:
+\(H_0:\beta_{\mathrm{educ}}=0\), frente a \(H_1:\beta_{\mathrm{educ}}\ne0\).
+Para sindicato:
+\(H_0:\beta_{\mathrm{sind}}=0\), frente a
+\(H_1:\beta_{\mathrm{sind}}\ne0\). Un IC que excluye cero indica
+evidencia de una diferencia o asociación condicional distinta de cero,
+según el caso. Las demás explicativas se consideran fijas. Los contrastes
+son sobre **medianas condicionales**, no sobre medias.</div>
+
+## Contrastes conjuntos de significancia
+
+Una pregunta sobre varios coeficientes requiere una prueba conjunta.
+Por ejemplo:
+
+\[
+H_0:\ \beta_{\mathrm{educ}}=\beta_{\mathrm{exper}}=
+\beta_{\mathrm{genero}}=\beta_{\mathrm{sind}}=0.
+\]
+
+En regresión LAD se pueden usar pruebas de rangos de `quantreg::anova`.
+Los modelos reducidos y completos deben ajustarse sobre **exactamente
+las mismas observaciones**.
+
+```{r salarios-pruebas-conjuntas}
+lad_solo_intercepto <- quantreg::rq(wage ~ 1, tau = .5,
+                                  data = salarios)
+lad_solo_numericas <- quantreg::rq(wage ~ education + experience,
+                                  tau = .5, data = salarios)
+
+cat("H0: ninguna de las cuatro variables agrega efecto condicional\n")
+print(anova(lad_solo_intercepto, lad_w, test = "rank"))
+
+cat("\nH0: género y sindicato no agregan efectos una vez incluidas\n")
+cat("educación y experiencia\n")
+print(anova(lad_solo_numericas, lad_w, test = "rank"))
+```
+
+<div class="pregunta"><strong>Actividad 7.</strong> Si la prueba conjunta
+rechaza \(H_0\), ¿se puede afirmar que los cuatro coeficientes son
+individualmente distintos de cero?</div>
+
+<div class="solucion"><strong>Respuesta.</strong> No. Rechazar una hipótesis
+conjunta indica que **al menos uno** de los coeficientes incluidos en ella
+es distinto de cero, al nivel de significancia utilizado. La prueba no
+identifica cuál. Para ello se deben examinar contrastes o intervalos
+individuales, teniendo en cuenta la multiplicidad si se realizan muchas
+pruebas.</div>
+
+## Predicción contextual e interpretación de cuatro años de educación
+
+Comparamos dos perfiles *hipotéticos* con la misma experiencia y las
+mismas categorías: uno con 12 años de educación y otro con 16.
+
+```{r salarios-perfiles}
+exp_fija <- median(salarios$experience)
+perfiles <- data.frame(
+  education = c(12, 16),
+  experience = c(exp_fija, exp_fija),
+  gender = factor(c(ref_genero, ref_genero),
+                  levels = levels(salarios$gender)),
+  union = factor(c(ref_union, ref_union),
+                 levels = levels(salarios$union))
+)
+perfiles$mediana_LAD <- as.numeric(predict(lad_w, newdata = perfiles))
+perfiles$media_LS <- as.numeric(predict(ls_w, newdata = perfiles))
+knitr::kable(perfiles, digits = 3,
+             caption = "Mediana y media salarial estimadas para dos perfiles")
+diferencia_4 <- diff(perfiles$mediana_LAD)
+```
+
+<div class="pregunta"><strong>Actividad 8.</strong> ¿Cuál es la diferencia
+estimada en la mediana salarial entre los dos perfiles? ¿Se puede presentar
+como un aumento garantizado para cualquier persona?</div>
+
+<div class="solucion"><strong>Respuesta numérica.</strong> El modelo LAD
+estima una diferencia de
+**`r redondea(as.numeric(diferencia_4))` USD por hora de 1985**
+entre los perfiles de 16 y 12 años de educación. Coincide con
+\(4\widehat\beta_{\mathrm{educ}}\), que en estos datos vale
+`r redondea(4 * unname(coef(lad_w)["education"]))`.
+Se trata de una diferencia estimada en las medianas **condicionales**;
+no garantiza el mismo cambio para cada individuo ni demuestra un efecto
+causal de estudiar cuatro años adicionales.</div>
+
+## Diagnóstico descriptivo y comparación de objetivos
+
+```{r salarios-residuales, fig.height=5}
+diag_w <- data.frame(ajustado = fitted(lad_w),
+                     residuo = residuals(lad_w))
+ggplot(diag_w, aes(ajustado, residuo)) +
+  geom_point(alpha = .55, color = "#5364DD", size = 1.8) +
+  geom_hline(yintercept = 0, linewidth = 1.0,
+             color = "#F16D6D", linetype = "dashed") +
+  labs(title = "Residuos LAD frente a los salarios ajustados",
+       subtitle = "Buscamos curvatura, dispersiones cambiantes y observaciones extremas",
+       x = "Mediana condicional ajustada (USD/hora)",
+       y = "Residuo observado menos ajustado (USD/hora)") + tema_lad
+```
+
+```{r salarios-perdidas}
+metricas_w <- data.frame(
+  Metodo = c("LS", "LAD"),
+  `Suma de errores absolutos` = c(sum(abs(residuals(ls_w))),
+                                   sum(abs(residuals(lad_w)))),
+  `Suma de errores cuadrados` = c(sum(residuals(ls_w)^2),
+                                  sum(residuals(lad_w)^2)),
+  check.names = FALSE
+)
+knitr::kable(metricas_w, digits = 3,
+             caption = "Cada modelo gana bajo su propio criterio de estimación")
+```
+
+<div class="pregunta"><strong>Actividad 9.</strong> ¿Qué se recomienda
+investigar si el gráfico de residuos presenta curvatura, dispersión creciente
+o grupos diferenciados? ¿Es adecuado informar el R² de `lm()` como si fuera
+el criterio de calidad de LAD?</div>
+
+<div class="solucion"><strong>Respuesta.</strong> Se puede revisar la forma
+funcional (por ejemplo, un término cuadrático en experiencia), las
+interacciones con factores, la heterogeneidad por ocupación y la influencia
+de puntos de alta palanca. LAD no elimina automáticamente estos problemas.
+El \(R^2\) habitual de mínimos cuadrados se basa en pérdidas cuadráticas;
+no debe presentarse como si fuera el criterio de ajuste de LAD. Aquí
+comparamos sumas absolutas, sumas cuadráticas e interpretabilidad.</div>
+
+## Ampliación: interacción educación por sindicato
+
+Una interacción plantea si la pendiente asociada con educación cambia
+según pertenencia sindical. Es una pregunta más exigente que comparar
+interceptos entre grupos.
+
+```{r salarios-interaccion}
+lad_interaccion <- quantreg::rq(
+  wage ~ education * union + experience + gender,
+  tau = .5, data = salarios
+)
+knitr::kable(tabla_inferencia(lad_interaccion, B = 299)$tabla,
+             digits = 3,
+             caption = "Modelo exploratorio LAD con interacción")
+cat("Contraste conjunto del término de interacción:\n")
+print(anova(lad_w, lad_interaccion, test = "rank"))
+```
+
+<div class="pregunta"><strong>Actividad 10.</strong> Interprete el término
+`education:union` de la tabla anterior. ¿Qué sucede con la pendiente de
+educación en el grupo sindical no de referencia?</div>
+
+<div class="solucion"><strong>Respuesta.</strong> La pendiente de educación
+en el grupo sindical de referencia es el coeficiente de `education`.
+En la otra categoría sindical, la pendiente es el coeficiente de
+`education` **más** el coeficiente del término de interacción. Un intervalo
+de interacción que incluya cero es compatible con pendientes iguales,
+aunque no demuestra su igualdad. Esta interpretación sigue siendo
+descriptiva y condicional a las variables incluidas.</div>
+
+# Síntesis de la sesión
+
+| Pregunta estadística | Herramienta en R | Lectura correcta |
+|---|---|---|
+| ¿Qué recta minimiza residuales absolutos? | `rq(y ~ x, tau=.5)` | Mediana condicional ajustada |
+| ¿Cómo se compara con LS? | `lm()` y `rq()` | Distintos objetivos de pérdida |
+| ¿Qué incertidumbre tiene una pendiente? | `summary(rq, se="boot")` | IC y pruebas aproximadas |
+| ¿Cómo estudiar intervalos por rangos? | `summary(rq, se="rank")` | Intervalos por inversión de pruebas |
+| ¿Influyen conjuntamente varias variables? | `anova(rq_reducido, rq_completo, test="rank")` | Contraste conjunto |
+| ¿Cómo interpretar categorías? | `factor()`, `relevel()` | Diferencias frente al grupo de referencia |
+| ¿Qué significa el coeficiente de educación? | `coef(rq)` y `predict()` | Cambio de mediana manteniendo constantes las demás X |
+
+**Tres conclusiones que deben conservarse:**
+
+1. LAD responde una pregunta sobre la **mediana condicional**.
+2. Una diferencia condicional observacional **no equivale a causalidad**.
+3. La resistencia a residuos verticales extremos no elimina la necesidad
+   de examinar **palanca, mezcla de grupos y especificación del modelo**.
+
+# Referencias y trazabilidad
+
+- Birkes, D. y Dodge, Y. (1993). *Alternative Methods of Regression*.
+  Capítulo 4, «Least-Absolute-Deviations Regression», pp. 57–83 del libro
+  guía suministrado al curso. La exposición teórica principal sigue su
+  esquema estimación simple, prueba de pendiente, extensión múltiple y
+  contraste conjunto.
+- Rousseeuw, P. J. y Leroy, A. M. (1987). *Robust Regression and Outlier
+  Detection*. Wiley. Datos CYG OB1, según la documentación de `robustbase`:
+  <https://cran.r-project.org/web/packages/robustbase/refman/robustbase.html>
+- Zeileis, A. y Kleiber, C. (2008). *Applied Econometrics with R*.
+  Springer. Documentación de `AER::CPS1985`:
+  <https://cran.r-project.org/web/packages/AER/refman/AER.html>
+- Koenker, R. (2005). *Quantile Regression*. Cambridge University Press.
+- Paquete `quantreg`, manual oficial de `summary.rq` y `anova.rq`:
+  <https://cran.r-project.org/package=quantreg>.
+
+*Nota histórica*: la encuesta salarial es de **1985**. Los dólares de
+1985 no deben interpretarse como valores salariales actuales.

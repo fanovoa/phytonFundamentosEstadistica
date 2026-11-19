@@ -1,0 +1,1111 @@
+---
+title: "Guía introductoria a RStudio: manejo elemental de bases de datos"
+subtitle: "Primer acercamiento a R y RStudio para estudiantes sin experiencia en programación"
+author: "Curso de análisis descriptivo de datos"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    df_print: paged
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+# Configuramos cómo se mostrarán los bloques de código al compilar el documento.
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Propósito de la guía
+
+Esta guía está diseñada para estudiantes que **no tienen experiencia previa en programación**. El objetivo no es aprender a programar en R desde cero, sino aprender a **interactuar con una base de datos** usando funciones ya disponibles en R y en la librería `dplyr`.
+
+La idea central será siempre la misma:
+
+> **Abrir una base → reconocer su estructura → consultar variables → seleccionar información → filtrar registros → crear nuevas variables → verificar los cambios.**
+
+Al terminar esta guía, el estudiante debería poder responder preguntas como las siguientes:
+
+- ¿Qué base de datos tengo cargada?
+- ¿Cuántas filas y columnas tiene?
+- ¿Qué variables contiene?
+- ¿Qué tipo de información almacena cada columna?
+- ¿Cómo puedo consultar una sola variable?
+- ¿Cómo selecciono algunas columnas?
+- ¿Cómo filtro observaciones?
+- ¿Cómo creo una nueva variable?
+- ¿Cómo modifico una variable creando una nueva, sin destruir la original?
+- ¿Cómo ordeno una base de datos?
+- ¿Cómo cuento los registros de una categoría?
+
+> **Idea importante:** durante esta guía no estudiaremos estructuras de programación como ciclos, funciones propias o algoritmos. Trabajaremos con funciones ya construidas para concentrarnos en el manejo de datos.
+
+# 1. R y RStudio: ¿son lo mismo?
+
+No. Conviene distinguirlos desde el comienzo:
+
+- **R** es el lenguaje que realiza los cálculos y procesa los datos.
+- **RStudio** es el entorno de trabajo que facilita escribir, ejecutar, guardar y organizar código en R.
+
+En un primer acercamiento basta con reconocer cuatro zonas de RStudio:
+
+| Zona | ¿Para qué sirve? |
+|---|---|
+| **Source** | Escribir, editar y guardar los códigos. |
+| **Console** | Ejecutar instrucciones y observar resultados. |
+| **Environment** | Ver los objetos y bases de datos que están cargados. |
+| **Files / Plots / Packages / Help** | Administrar archivos, gráficos, librerías y ayuda. |
+
+## 1.1. Recomendación de trabajo
+
+En general, conviene escribir el código en un archivo con extensión `.R` o en un archivo `.Rmd`, y luego enviarlo a la consola.
+
+En Windows y Linux, una forma común de ejecutar una línea desde el editor es:
+
+- `Ctrl + Enter`
+
+En macOS:
+
+- `Cmd + Enter`
+
+No es necesario escribir todos los comandos directamente en la consola.
+
+# 2. Preparación: instalar y cargar `dplyr`
+
+Para manipular bases de datos utilizaremos principalmente la librería `dplyr`.
+
+## 2.1. Instalar la librería
+
+La instalación se realiza normalmente **una sola vez** en el computador.
+
+Ejecute la siguiente instrucción directamente en la consola de RStudio antes de compilar esta guía:
+
+```{r instalar-dplyr, eval=FALSE}
+# Instalamos la librería dplyr desde CRAN; normalmente esta línea se ejecuta una sola vez.
+install.packages("dplyr")
+```
+
+## 2.2. Cargar la librería
+
+Cada vez que se inicia una nueva sesión de RStudio debemos cargar la librería:
+
+```{r cargar-dplyr}
+# Cargamos dplyr para tener disponibles sus funciones de manipulación de datos.
+library(dplyr)
+```
+
+> **Instalar** y **cargar** no significan lo mismo. `install.packages()` instala una librería en el computador; `library()` la activa en la sesión actual.
+
+# 3. Nuestra primera base de datos: `iris`
+
+Para evitar inicialmente dificultades asociadas con rutas, carpetas o archivos externos, comenzaremos con una base de datos que viene incluida en R.
+
+`iris` contiene mediciones de flores pertenecientes a tres especies diferentes.
+
+```{r cargar-iris}
+# Cargamos la base de datos iris, incluida en la instalación estándar de R.
+data(iris)
+```
+
+Podemos pedirle a R que muestre el objeto completo, aunque para bases grandes no suele ser la mejor opción.
+
+```{r mostrar-iris}
+# Mostramos la base de datos iris en la salida del documento.
+iris
+```
+
+En RStudio también podemos abrirla en una vista tipo hoja de cálculo. Esta instrucción es interactiva y por eso no se ejecuta durante la compilación del documento.
+
+```{r ver-iris-rstudio, eval=FALSE}
+# Abrimos iris en el visor de datos de RStudio.
+View(iris)
+```
+
+## 3.1. Filas y columnas
+
+Una base de datos como `iris` está organizada en:
+
+- **Filas:** representan observaciones o registros.
+- **Columnas:** representan variables.
+
+Por ejemplo, cada fila de `iris` corresponde a una flor y cada columna describe una característica de esa flor.
+
+# 4. ¿Estamos trabajando realmente con un `data.frame`?
+
+Una estructura muy utilizada para almacenar datos en R es el `data.frame`.
+
+Podemos preguntarle a R cuál es la clase del objeto:
+
+```{r clase-iris}
+# Consultamos la clase del objeto iris.
+class(iris)
+```
+
+También podemos hacer una pregunta cuya respuesta sea `TRUE` o `FALSE`:
+
+```{r comprobar-dataframe}
+# Verificamos explícitamente si iris es un data.frame.
+is.data.frame(iris)
+```
+
+Si R devuelve `TRUE`, hemos confirmado que estamos trabajando con un `data.frame`.
+
+Otra función muy útil es `str()`, que resume la estructura interna del objeto:
+
+```{r estructura-iris}
+# Inspeccionamos la estructura de la base de datos iris.
+str(iris)
+```
+
+Al leer la salida, observe especialmente:
+
+- el número de observaciones;
+- el número de variables;
+- el nombre de cada variable;
+- el tipo de información almacenada en cada columna.
+
+# 5. Primeras y últimas observaciones
+
+Para inspeccionar rápidamente una base no es necesario imprimirla completa.
+
+```{r primeras-filas}
+# Mostramos las primeras seis observaciones de iris.
+head(iris)
+```
+
+```{r ultimas-filas}
+# Mostramos las últimas seis observaciones de iris.
+tail(iris)
+```
+
+También podemos decidir cuántas filas queremos observar.
+
+```{r primeras-tres}
+# Mostramos únicamente las primeras tres observaciones de iris.
+head(iris, 3)
+```
+
+# 6. ¿Cuántas filas y columnas tiene la base?
+
+Utilizaremos tres funciones muy sencillas.
+
+```{r numero-filas}
+# Contamos cuántas filas u observaciones tiene iris.
+nrow(iris)
+```
+
+```{r numero-columnas}
+# Contamos cuántas columnas o variables tiene iris.
+ncol(iris)
+```
+
+```{r dimensiones}
+# Consultamos simultáneamente el número de filas y de columnas de iris.
+dim(iris)
+```
+
+La salida de `dim()` se interpreta en el orden:
+
+\[
+(\text{número de filas},\;\text{número de columnas}).
+\]
+
+# 7. ¿Qué variables contiene la base?
+
+Podemos consultar los nombres de las columnas mediante `names()`.
+
+```{r nombres-columnas}
+# Consultamos los nombres de todas las variables de iris.
+names(iris)
+```
+
+También existe `colnames()`:
+
+```{r colnames-iris}
+# Consultamos nuevamente los nombres de las columnas usando colnames().
+colnames(iris)
+```
+
+Las variables de `iris` son:
+
+- `Sepal.Length`
+- `Sepal.Width`
+- `Petal.Length`
+- `Petal.Width`
+- `Species`
+
+En este punto basta con reconocer dos ideas generales:
+
+- algunas columnas contienen **números**;
+- otras columnas contienen **categorías o etiquetas**.
+
+El estudio formal de los tipos de variables se realizará posteriormente en el análisis descriptivo.
+
+# 8. Una inspección rápida con `glimpse()`
+
+La función `glimpse()` pertenece a `dplyr` y es especialmente útil para revisar una base de datos antes de comenzar a trabajar con ella.
+
+```{r glimpse-iris}
+# Mostramos una vista compacta de la estructura y algunos valores de iris.
+glimpse(iris)
+```
+
+Conviene convertir esta acción en un hábito:
+
+> **Antes de analizar una base, primero revise su estructura con `glimpse()`.**
+
+# 9. Extraer una sola columna
+
+Una operación básica consiste en extraer una variable específica.
+
+Para ello podemos utilizar el símbolo `$`.
+
+```{r extraer-sepal-length}
+# Extraemos la columna Sepal.Length de la base iris.
+iris$Sepal.Length
+```
+
+Una forma útil de leer esta instrucción es:
+
+> “De la base `iris`, quiero la variable `Sepal.Length`”.
+
+Podemos hacer lo mismo con una variable categórica.
+
+```{r extraer-species}
+# Extraemos la columna Species de la base iris.
+iris$Species
+```
+
+Podemos combinar la extracción de una columna con una función ya existente.
+
+```{r media-sepal-length}
+# Calculamos la media de la variable Sepal.Length.
+mean(iris$Sepal.Length)
+```
+
+También podemos contar cuántas veces aparece cada categoría.
+
+```{r tabla-species}
+# Contamos cuántas observaciones aparecen en cada categoría de Species.
+table(iris$Species)
+```
+
+> En esta guía el objetivo no es interpretar todavía la media o construir un análisis descriptivo completo; usamos estas funciones solo para observar que una columna puede extraerse y entregarse a otra función.
+
+# 10. Seleccionar columnas con `select()`
+
+Con `select()` podemos construir una vista de la base que contenga únicamente las variables que nos interesan.
+
+```{r seleccionar-dos-columnas}
+# Seleccionamos únicamente Sepal.Length y Sepal.Width de iris.
+select(iris, Sepal.Length, Sepal.Width)
+```
+
+Podemos guardar el resultado en un nuevo objeto.
+
+```{r crear-iris-sepalo}
+# Creamos una nueva base conservando tres variables de iris.
+iris_sepalo <- select(iris, Sepal.Length, Sepal.Width, Species)
+
+# Mostramos las primeras observaciones de la nueva base.
+head(iris_sepalo)
+```
+
+Podemos verificar qué columnas contiene la nueva base.
+
+```{r nombres-iris-sepalo}
+# Consultamos los nombres de las variables de iris_sepalo.
+names(iris_sepalo)
+```
+
+Observe que `iris` sigue existiendo y no fue modificada.
+
+```{r comprobar-iris-original}
+# Consultamos nuevamente los nombres de iris para comprobar que la base original conserva sus cinco variables.
+names(iris)
+```
+
+> **Principio de trabajo:** cuando estamos aprendiendo o limpiando datos, suele ser conveniente crear un objeto nuevo en lugar de destruir la base original.
+
+# 11. El operador `|>`: leer el código como una secuencia
+
+R incluye el operador `|>`, conocido como *pipe*. Permite leer una secuencia de operaciones de izquierda a derecha.
+
+```{r pipe-select}
+# Tomamos iris y pasamos la base a select() para conservar tres variables.
+iris |> select(Sepal.Length, Sepal.Width, Species)
+```
+
+Esta instrucción puede leerse como:
+
+> “Tome `iris` y luego seleccione `Sepal.Length`, `Sepal.Width` y `Species`”.
+
+Podemos encadenar otra operación.
+
+```{r pipe-select-head}
+# Seleccionamos tres variables de iris y luego mostramos las primeras seis filas del resultado.
+iris |> select(Species, Petal.Length, Petal.Width) |> head()
+```
+
+En esta primera guía usaremos el *pipe* solo cuando ayude a que el código sea más fácil de leer.
+
+# 12. Filtrar observaciones con `filter()`
+
+Hasta ahora hemos seleccionado **columnas**. Con `filter()` seleccionamos **filas** que cumplen una condición.
+
+Por ejemplo, podemos conservar únicamente las flores de la especie `setosa`.
+
+```{r filtrar-setosa}
+# Conservamos solamente las filas cuya especie es setosa.
+filter(iris, Species == "setosa")
+```
+
+El símbolo `==` significa **igual a** dentro de una condición lógica.
+
+También podemos filtrar utilizando una variable numérica.
+
+```{r filtrar-sepal-mayor-6}
+# Conservamos las flores cuya longitud de sépalo es mayor que 6.
+filter(iris, Sepal.Length > 6)
+```
+
+Podemos imponer más de una condición al mismo tiempo.
+
+```{r filtrar-dos-condiciones}
+# Conservamos las flores versicolor cuya longitud de sépalo es mayor que 6.
+filter(iris, Species == "versicolor", Sepal.Length > 6)
+```
+
+Algunos operadores que aparecerán con frecuencia son:
+
+| Operador | Significado |
+|---|---|
+| `==` | igual a |
+| `!=` | diferente de |
+| `>` | mayor que |
+| `<` | menor que |
+| `>=` | mayor o igual que |
+| `<=` | menor o igual que |
+
+# 13. Seleccionar columnas y filtrar filas
+
+Ahora podemos combinar las dos ideas anteriores.
+
+```{r filtrar-y-seleccionar}
+# Filtramos primero las observaciones de la especie virginica.
+iris_virginica <- filter(iris, Species == "virginica")
+
+# Seleccionamos tres variables de la base filtrada.
+iris_virginica_reducida <- select(iris_virginica, Species, Sepal.Length, Petal.Length)
+
+# Mostramos las primeras filas del resultado final.
+head(iris_virginica_reducida)
+```
+
+La misma consulta puede expresarse con el *pipe*.
+
+```{r filtrar-y-seleccionar-pipe}
+# Tomamos iris, filtramos virginica y conservamos tres variables.
+iris |> filter(Species == "virginica") |> select(Species, Sepal.Length, Petal.Length)
+```
+
+# 14. Crear una nueva columna con `mutate()`
+
+La función `mutate()` permite crear nuevas variables utilizando información que ya existe en la base.
+
+Por ejemplo, podemos construir una variable llamada `Sepal.Area` como producto de la longitud y el ancho del sépalo:
+
+\[
+\text{Sepal.Area}=\text{Sepal.Length}\times\text{Sepal.Width}.
+\]
+
+```{r crear-area-sepalo}
+# Creamos una nueva base a partir de iris y añadimos la variable Sepal.Area.
+iris_nueva <- mutate(iris, Sepal.Area = Sepal.Length * Sepal.Width)
+
+# Mostramos las primeras filas de la nueva base para observar la columna creada.
+head(iris_nueva)
+```
+
+Podemos verificar los nombres de sus columnas.
+
+```{r verificar-area-sepalo}
+# Consultamos los nombres de las variables de iris_nueva.
+names(iris_nueva)
+```
+
+# 15. Modificar una variable creando una nueva
+
+Durante el aprendizaje es recomendable **conservar la variable original** y crear otra con la transformación deseada.
+
+Las longitudes de `iris` están expresadas en centímetros. Podemos crear una versión en milímetros:
+
+\[
+\text{Sepal.Length.mm}=10\times\text{Sepal.Length}.
+\]
+
+```{r longitud-milimetros}
+# Creamos una nueva base y añadimos la longitud del sépalo expresada en milímetros.
+iris_mm <- mutate(iris, Sepal.Length.mm = Sepal.Length * 10)
+
+# Seleccionamos la variable original y la nueva para compararlas.
+comparacion_unidades <- select(iris_mm, Sepal.Length, Sepal.Length.mm)
+
+# Mostramos las primeras observaciones de ambas columnas.
+head(comparacion_unidades)
+```
+
+Observe que no reemplazamos `Sepal.Length`; construimos `Sepal.Length.mm` y conservamos las dos.
+
+# 16. Crear una variable categórica a partir de una condición
+
+También podemos crear una columna cuyos valores dependan de una condición.
+
+La función `if_else()` pertenece a `dplyr`.
+
+```{r crear-categoria-sepalo}
+# Creamos una nueva variable que clasifica la longitud del sépalo usando un punto de corte de 5.8 cm.
+iris_clasificada <- mutate(iris, Sepalo = if_else(Sepal.Length >= 5.8, "Grande", "Pequeño"))
+
+# Mostramos las primeras observaciones de la base con la nueva variable.
+head(iris_clasificada)
+```
+
+Podemos contar los registros de cada categoría recién creada.
+
+```{r contar-categoria-sepalo}
+# Contamos cuántas observaciones fueron clasificadas como Grande o Pequeño.
+table(iris_clasificada$Sepalo)
+```
+
+Lo importante aquí es comprender la lógica:
+
+> Una nueva variable puede construirse a partir de información ya almacenada en otras columnas.
+
+# 17. Ordenar una base con `arrange()`
+
+Para ordenar los registros de menor a mayor según una variable utilizamos `arrange()`.
+
+```{r ordenar-ascendente}
+# Ordenamos las flores de menor a mayor longitud de sépalo.
+arrange(iris, Sepal.Length)
+```
+
+Para ordenar de mayor a menor utilizamos `desc()` dentro de `arrange()`.
+
+```{r ordenar-descendente}
+# Ordenamos las flores de mayor a menor longitud de sépalo.
+arrange(iris, desc(Sepal.Length))
+```
+
+Podemos combinar ordenamiento y visualización.
+
+```{r seis-petalos-mayores}
+# Ordenamos iris de mayor a menor longitud de pétalo y mostramos las seis primeras observaciones.
+iris |> arrange(desc(Petal.Length)) |> head()
+```
+
+# 18. Contar categorías con `count()`
+
+`count()` es una función de `dplyr` que facilita el conteo de observaciones por categoría.
+
+```{r contar-especies}
+# Contamos cuántas observaciones pertenecen a cada especie.
+count(iris, Species)
+```
+
+En cursos de análisis descriptivo, esta operación será muy útil posteriormente para construir tablas de frecuencias.
+
+# 19. Un primer flujo completo de trabajo
+
+Ahora combinaremos varias acciones en una sola consulta.
+
+Queremos:
+
+1. conservar flores cuya longitud del sépalo sea mayor que `5.5`;
+2. crear una variable `Sepal.Area`;
+3. conservar cuatro columnas;
+4. ordenar de mayor a menor según el área creada.
+
+```{r flujo-completo}
+# Filtramos las observaciones cuya longitud del sépalo es mayor que 5.5.
+paso_1 <- filter(iris, Sepal.Length > 5.5)
+
+# Añadimos una variable con el producto entre la longitud y el ancho del sépalo.
+paso_2 <- mutate(paso_1, Sepal.Area = Sepal.Length * Sepal.Width)
+
+# Conservamos únicamente las cuatro variables de interés.
+paso_3 <- select(paso_2, Species, Sepal.Length, Sepal.Width, Sepal.Area)
+
+# Ordenamos el resultado desde el mayor hasta el menor valor de Sepal.Area.
+resultado_flujo <- arrange(paso_3, desc(Sepal.Area))
+
+# Mostramos las primeras observaciones del resultado final.
+head(resultado_flujo)
+```
+
+Una vez comprendidos los pasos, podemos escribir la consulta de manera compacta con `|>`.
+
+```{r flujo-completo-pipe}
+# Encadenamos filtro, creación de variable, selección y ordenamiento en una sola secuencia legible.
+iris |> filter(Sepal.Length > 5.5) |> mutate(Sepal.Area = Sepal.Length * Sepal.Width) |> select(Species, Sepal.Length, Sepal.Width, Sepal.Area) |> arrange(desc(Sepal.Area))
+```
+
+La lectura verbal sería:
+
+> Tome `iris`; conserve las flores cuya longitud del sépalo sea mayor que 5.5; cree el área aproximada del sépalo; conserve cuatro variables; finalmente ordene de mayor a menor según esa nueva variable.
+
+# 20. Actividad guiada con `iris`
+
+Intente resolver primero cada pregunta antes de consultar una posible solución.
+
+## Pregunta 1
+
+¿Cuántas filas y columnas contiene `iris`?
+
+```{r actividad-iris-1, eval=FALSE}
+# Escriba aquí su código.
+```
+
+## Pregunta 2
+
+¿Cuáles son las variables disponibles?
+
+```{r actividad-iris-2, eval=FALSE}
+# Escriba aquí su código.
+```
+
+## Pregunta 3
+
+Extraiga únicamente la variable `Petal.Length`.
+
+```{r actividad-iris-3, eval=FALSE}
+# Escriba aquí su código.
+```
+
+## Pregunta 4
+
+Construya una base que contenga únicamente `Species`, `Sepal.Length` y `Petal.Length`.
+
+```{r actividad-iris-4, eval=FALSE}
+# Escriba aquí su código.
+```
+
+## Pregunta 5
+
+Seleccione solamente las observaciones pertenecientes a `virginica`.
+
+```{r actividad-iris-5, eval=FALSE}
+# Escriba aquí su código.
+```
+
+## Pregunta 6
+
+Seleccione las flores que cumplan:
+
+\[
+\text{Petal.Length}>5.
+\]
+
+```{r actividad-iris-6, eval=FALSE}
+# Escriba aquí su código.
+```
+
+## Pregunta 7
+
+Cree una nueva variable:
+
+\[
+\text{Petal.Area}=\text{Petal.Length}\times\text{Petal.Width}.
+\]
+
+```{r actividad-iris-7, eval=FALSE}
+# Escriba aquí su código.
+```
+
+## Pregunta 8
+
+Cree `Petal.Length.mm` convirtiendo la longitud del pétalo de centímetros a milímetros.
+
+```{r actividad-iris-8, eval=FALSE}
+# Escriba aquí su código.
+```
+
+## Pregunta 9
+
+Ordene la base desde la flor con mayor `Petal.Length` hasta la menor.
+
+```{r actividad-iris-9, eval=FALSE}
+# Escriba aquí su código.
+```
+
+## Pregunta 10
+
+Determine cuántas observaciones existen de cada especie.
+
+```{r actividad-iris-10, eval=FALSE}
+# Escriba aquí su código.
+```
+
+# 21. Reto integrador con `iris`
+
+Construya una nueva base que:
+
+1. contenga únicamente flores de la especie `virginica`;
+2. conserve solo observaciones con `Petal.Length > 5`;
+3. conserve `Species`, `Petal.Length` y `Petal.Width`;
+4. cree `Petal.Area`;
+5. ordene las observaciones de mayor a menor según `Petal.Area`.
+
+Una posible solución es la siguiente:
+
+```{r reto-iris-solucion}
+# Conservamos las observaciones de la especie virginica con pétalos de longitud mayor que 5 cm.
+resultado <- filter(iris, Species == "virginica", Petal.Length > 5)
+
+# Creamos la variable Petal.Area multiplicando longitud y ancho del pétalo.
+resultado <- mutate(resultado, Petal.Area = Petal.Length * Petal.Width)
+
+# Conservamos únicamente las variables que necesitamos para la consulta final.
+resultado <- select(resultado, Species, Petal.Length, Petal.Width, Petal.Area)
+
+# Ordenamos los registros desde el mayor hasta el menor valor de Petal.Area.
+resultado <- arrange(resultado, desc(Petal.Area))
+
+# Mostramos las primeras observaciones del resultado.
+head(resultado)
+```
+
+# 22. Vocabulario mínimo de esta primera guía
+
+No es necesario memorizar todos los comandos. Lo importante es reconocer qué pregunta responde cada uno.
+
+| Función o símbolo | Pregunta que ayuda a responder |
+|---|---|
+| `data()` | ¿Cómo cargo una base incluida en R? |
+| `head()` | ¿Cómo se ven las primeras filas? |
+| `tail()` | ¿Cómo se ven las últimas filas? |
+| `dim()` | ¿Cuántas filas y columnas hay? |
+| `nrow()` | ¿Cuántas observaciones hay? |
+| `ncol()` | ¿Cuántas variables hay? |
+| `names()` | ¿Cómo se llaman las variables? |
+| `class()` | ¿Qué clase de objeto tengo? |
+| `is.data.frame()` | ¿Estoy trabajando con un `data.frame`? |
+| `str()` | ¿Cómo está estructurada la base? |
+| `glimpse()` | ¿Cómo inspecciono rápidamente la base? |
+| `$` | ¿Cómo extraigo una columna? |
+| `select()` | ¿Cómo selecciono variables? |
+| `filter()` | ¿Cómo selecciono observaciones? |
+| `mutate()` | ¿Cómo creo o transformo variables? |
+| `if_else()` | ¿Cómo creo una variable usando una condición? |
+| `arrange()` | ¿Cómo ordeno los registros? |
+| `desc()` | ¿Cómo ordeno de mayor a menor? |
+| `count()` | ¿Cómo cuento observaciones por categoría? |
+| `|>` | ¿Cómo encadeno varias operaciones? |
+
+# 23. Qué no estudiaremos todavía
+
+En esta primera aproximación evitaremos deliberadamente:
+
+- ciclos `for` y `while`;
+- creación de funciones propias;
+- listas y estructuras anidadas;
+- programación funcional;
+- algoritmos escritos desde cero;
+- importación compleja de archivos;
+- análisis estadístico inferencial;
+- modelamiento.
+
+El objetivo es que el estudiante termine esta guía pensando:
+
+> **“Sé cargar una base, reconocer su estructura, consultar sus columnas, filtrar registros y crear nuevas variables”.**
+
+# 24. Práctica adicional con bases de datos menos recurrentes
+
+A continuación utilizaremos dos bases incluidas en R que suelen aparecer con menor frecuencia que `iris`, `mtcars` o `airquality` en las prácticas introductorias.
+
+Las bases seleccionadas son:
+
+- `attenu`: registros relacionados con eventos sísmicos y mediciones de aceleración;
+- `morley`: mediciones históricas del experimento de velocidad de la luz de Michelson y Morley.
+
+El objetivo sigue siendo **manejar bases de datos**, no realizar todavía un análisis estadístico completo.
+
+## 24.1. Base `attenu`
+
+La base contiene, entre otras, las variables:
+
+- `event`: identificador del evento;
+- `mag`: magnitud;
+- `station`: estación de medición;
+- `dist`: distancia;
+- `accel`: aceleración registrada.
+
+Cargue primero la base:
+
+```{r cargar-attenu}
+# Cargamos la base de datos attenu incluida en R.
+data(attenu)
+
+# Observamos rápidamente su estructura.
+glimpse(attenu)
+```
+
+### Ejercicios con `attenu`
+
+1. Verifique que `attenu` es un `data.frame`.
+2. Determine cuántas filas y columnas tiene.
+3. Consulte los nombres de todas sus variables.
+4. Extraiga únicamente la columna `mag`.
+5. Construya una nueva base que contenga `event`, `mag`, `dist` y `accel`.
+6. Filtre las observaciones con `mag >= 6`.
+7. Filtre las observaciones que simultáneamente tengan `mag >= 6` y `dist < 100`.
+8. Cree una nueva variable llamada `dist_m` que exprese la distancia en metros, usando la relación `dist_m = dist * 1000`.
+9. Cree una nueva variable llamada `distancia_tipo` que tome el valor `"Corta"` cuando `dist < 100` y `"Larga"` en caso contrario.
+10. Ordene la base de mayor a menor según `accel` y muestre las primeras diez observaciones.
+11. Cuente cuántos registros existen para cada valor de `event`.
+12. Construya una consulta final que conserve únicamente registros con `mag >= 6`, cree `dist_m`, seleccione `event`, `mag`, `dist`, `dist_m` y `accel`, y ordene de mayor a menor según `accel`.
+
+## 24.2. Base `morley`
+
+`morley` contiene resultados de experimentos sobre la velocidad de la luz. Sus columnas principales son:
+
+- `Expt`: número de experimento;
+- `Run`: número de corrida;
+- `Speed`: medición reportada como diferencia respecto a 299000 km/s.
+
+Cargue la base:
+
+```{r cargar-morley}
+# Cargamos la base de datos morley incluida en R.
+data(morley)
+
+# Observamos rápidamente su estructura.
+glimpse(morley)
+```
+
+### Ejercicios con `morley`
+
+1. Verifique que `morley` es un `data.frame`.
+2. Determine sus dimensiones.
+3. Consulte los nombres de sus variables.
+4. Extraiga únicamente la columna `Speed`.
+5. Construya una base con `Expt` y `Speed`.
+6. Filtre únicamente las observaciones del experimento `Expt == 1`.
+7. Filtre las observaciones cuyo valor de `Speed` sea mayor que `900`.
+8. Cree `Speed_km_s` mediante `Speed_km_s = 299000 + Speed`.
+9. Cree también `Speed_m_s` multiplicando `Speed_km_s` por `1000`.
+10. Cree una variable `Speed_tipo` que tome el valor `"Mayor_o_igual_a_900"` cuando `Speed >= 900` y `"Menor_a_900"` en caso contrario.
+11. Ordene la base primero por `Expt` y luego por `Run`.
+12. Cuente cuántas observaciones existen en cada experimento.
+13. Construya una consulta final que conserve únicamente los registros con `Speed >= 900`, cree `Speed_km_s`, seleccione `Expt`, `Run`, `Speed` y `Speed_km_s`, y ordene de mayor a menor según `Speed_km_s`.
+
+# 25. Soluciones comentadas de la práctica adicional
+
+Esta sección debe consultarse **después de intentar resolver los ejercicios**. Cada solución utiliza únicamente herramientas presentadas en la guía.
+
+## 25.1. Soluciones para `attenu`
+
+### Ejercicio 1. Verificar que es un `data.frame`
+
+```{r solucion-attenu-1}
+# Preguntamos a R si attenu pertenece a la clase de objetos data.frame.
+is.data.frame(attenu)
+```
+
+### Ejercicio 2. Determinar filas y columnas
+
+```{r solucion-attenu-2}
+# Consultamos simultáneamente el número de filas y el número de columnas.
+dim(attenu)
+
+# Consultamos únicamente el número de filas.
+nrow(attenu)
+
+# Consultamos únicamente el número de columnas.
+ncol(attenu)
+```
+
+### Ejercicio 3. Consultar los nombres de las variables
+
+```{r solucion-attenu-3}
+# Mostramos los nombres de todas las columnas de attenu.
+names(attenu)
+```
+
+### Ejercicio 4. Extraer la columna `mag`
+
+```{r solucion-attenu-4}
+# Extraemos únicamente la variable mag usando el operador $.
+attenu$mag
+```
+
+### Ejercicio 5. Construir una base con cuatro columnas
+
+```{r solucion-attenu-5}
+# Seleccionamos event, mag, dist y accel y guardamos el resultado en una nueva base.
+attenu_reducida <- select(attenu, event, mag, dist, accel)
+
+# Mostramos las primeras observaciones de la nueva base.
+head(attenu_reducida)
+```
+
+### Ejercicio 6. Filtrar `mag >= 6`
+
+```{r solucion-attenu-6}
+# Conservamos únicamente los registros cuya magnitud es mayor o igual que 6.
+attenu_mag6 <- filter(attenu, mag >= 6)
+
+# Mostramos las primeras observaciones del resultado.
+head(attenu_mag6)
+```
+
+### Ejercicio 7. Filtrar simultáneamente por magnitud y distancia
+
+```{r solucion-attenu-7}
+# Conservamos los registros con magnitud mayor o igual que 6 y distancia menor que 100.
+attenu_filtrada <- filter(attenu, mag >= 6, dist < 100)
+
+# Mostramos las primeras observaciones del resultado filtrado.
+head(attenu_filtrada)
+```
+
+### Ejercicio 8. Crear `dist_m`
+
+```{r solucion-attenu-8}
+# Creamos una nueva columna que expresa la distancia en metros.
+attenu_metros <- mutate(attenu, dist_m = dist * 1000)
+
+# Seleccionamos la distancia original y la nueva para compararlas.
+comparacion_distancias <- select(attenu_metros, dist, dist_m)
+
+# Mostramos las primeras observaciones de ambas columnas.
+head(comparacion_distancias)
+```
+
+### Ejercicio 9. Crear `distancia_tipo`
+
+```{r solucion-attenu-9}
+# Creamos una nueva variable categórica usando 100 como punto de corte para dist.
+attenu_tipo <- mutate(attenu, distancia_tipo = if_else(dist < 100, "Corta", "Larga"))
+
+# Seleccionamos dist y la nueva categoría para revisar la clasificación.
+revision_tipo <- select(attenu_tipo, dist, distancia_tipo)
+
+# Mostramos las primeras observaciones de la clasificación.
+head(revision_tipo)
+```
+
+### Ejercicio 10. Ordenar por `accel`
+
+```{r solucion-attenu-10}
+# Ordenamos los registros desde el mayor hasta el menor valor de accel.
+attenu_ordenada <- arrange(attenu, desc(accel))
+
+# Mostramos únicamente las primeras diez observaciones de la base ordenada.
+head(attenu_ordenada, 10)
+```
+
+### Ejercicio 11. Contar registros por evento
+
+```{r solucion-attenu-11}
+# Contamos cuántos registros corresponden a cada identificador de evento.
+conteo_eventos <- count(attenu, event)
+
+# Mostramos el conteo obtenido.
+conteo_eventos
+```
+
+### Ejercicio 12. Consulta integradora con `attenu`
+
+```{r solucion-attenu-12}
+# Conservamos únicamente los registros con magnitud mayor o igual que 6.
+attenu_final <- filter(attenu, mag >= 6)
+
+# Creamos una nueva columna con la distancia expresada en metros.
+attenu_final <- mutate(attenu_final, dist_m = dist * 1000)
+
+# Conservamos únicamente las variables solicitadas.
+attenu_final <- select(attenu_final, event, mag, dist, dist_m, accel)
+
+# Ordenamos desde el mayor hasta el menor valor de accel.
+attenu_final <- arrange(attenu_final, desc(accel))
+
+# Mostramos las primeras observaciones de la consulta final.
+head(attenu_final)
+```
+
+## 25.2. Soluciones para `morley`
+
+### Ejercicio 1. Verificar que es un `data.frame`
+
+```{r solucion-morley-1}
+# Preguntamos a R si morley es un data.frame.
+is.data.frame(morley)
+```
+
+### Ejercicio 2. Determinar las dimensiones
+
+```{r solucion-morley-2}
+# Consultamos simultáneamente el número de filas y columnas de morley.
+dim(morley)
+
+# Consultamos únicamente el número de filas.
+nrow(morley)
+
+# Consultamos únicamente el número de columnas.
+ncol(morley)
+```
+
+### Ejercicio 3. Consultar los nombres de las variables
+
+```{r solucion-morley-3}
+# Mostramos los nombres de todas las columnas de morley.
+names(morley)
+```
+
+### Ejercicio 4. Extraer la columna `Speed`
+
+```{r solucion-morley-4}
+# Extraemos únicamente la columna Speed usando el operador $.
+morley$Speed
+```
+
+### Ejercicio 5. Construir una base con `Expt` y `Speed`
+
+```{r solucion-morley-5}
+# Seleccionamos las variables Expt y Speed y guardamos el resultado.
+morley_reducida <- select(morley, Expt, Speed)
+
+# Mostramos las primeras observaciones de la nueva base.
+head(morley_reducida)
+```
+
+### Ejercicio 6. Filtrar el experimento 1
+
+```{r solucion-morley-6}
+# Conservamos únicamente las observaciones correspondientes al experimento 1.
+morley_expt1 <- filter(morley, Expt == 1)
+
+# Mostramos las primeras observaciones del resultado.
+head(morley_expt1)
+```
+
+### Ejercicio 7. Filtrar `Speed > 900`
+
+```{r solucion-morley-7}
+# Conservamos únicamente los registros cuyo valor de Speed es mayor que 900.
+morley_900 <- filter(morley, Speed > 900)
+
+# Mostramos las primeras observaciones del resultado filtrado.
+head(morley_900)
+```
+
+### Ejercicio 8. Crear `Speed_km_s`
+
+```{r solucion-morley-8}
+# Creamos la velocidad completa en kilómetros por segundo sumando 299000 a Speed.
+morley_velocidad <- mutate(morley, Speed_km_s = 299000 + Speed)
+
+# Seleccionamos Speed y Speed_km_s para comparar ambas columnas.
+comparacion_velocidad <- select(morley_velocidad, Speed, Speed_km_s)
+
+# Mostramos las primeras observaciones de la comparación.
+head(comparacion_velocidad)
+```
+
+### Ejercicio 9. Crear `Speed_m_s`
+
+```{r solucion-morley-9}
+# Creamos primero Speed_km_s a partir de la medición almacenada en Speed.
+morley_unidades <- mutate(morley, Speed_km_s = 299000 + Speed)
+
+# Creamos Speed_m_s multiplicando la velocidad en km/s por 1000.
+morley_unidades <- mutate(morley_unidades, Speed_m_s = Speed_km_s * 1000)
+
+# Seleccionamos las tres variables para comparar las transformaciones realizadas.
+revision_unidades <- select(morley_unidades, Speed, Speed_km_s, Speed_m_s)
+
+# Mostramos las primeras observaciones del resultado.
+head(revision_unidades)
+```
+
+### Ejercicio 10. Crear `Speed_tipo`
+
+```{r solucion-morley-10}
+# Creamos una categoría según si Speed es mayor o igual que 900.
+morley_tipo <- mutate(morley, Speed_tipo = if_else(Speed >= 900, "Mayor_o_igual_a_900", "Menor_a_900"))
+
+# Seleccionamos Speed y la nueva variable para revisar la clasificación.
+revision_speed_tipo <- select(morley_tipo, Speed, Speed_tipo)
+
+# Mostramos las primeras observaciones de la clasificación.
+head(revision_speed_tipo)
+```
+
+### Ejercicio 11. Ordenar por `Expt` y luego por `Run`
+
+```{r solucion-morley-11}
+# Ordenamos primero por Expt y, dentro de cada experimento, por Run.
+morley_ordenada <- arrange(morley, Expt, Run)
+
+# Mostramos las primeras observaciones de la base ordenada.
+head(morley_ordenada)
+```
+
+### Ejercicio 12. Contar observaciones por experimento
+
+```{r solucion-morley-12}
+# Contamos cuántas observaciones pertenecen a cada valor de Expt.
+conteo_experimentos <- count(morley, Expt)
+
+# Mostramos la tabla de conteos obtenida.
+conteo_experimentos
+```
+
+### Ejercicio 13. Consulta integradora con `morley`
+
+```{r solucion-morley-13}
+# Conservamos únicamente las observaciones cuyo valor de Speed es mayor o igual que 900.
+morley_final <- filter(morley, Speed >= 900)
+
+# Creamos la velocidad completa expresada en kilómetros por segundo.
+morley_final <- mutate(morley_final, Speed_km_s = 299000 + Speed)
+
+# Conservamos únicamente las variables solicitadas en el ejercicio.
+morley_final <- select(morley_final, Expt, Run, Speed, Speed_km_s)
+
+# Ordenamos desde el mayor hasta el menor valor de Speed_km_s.
+morley_final <- arrange(morley_final, desc(Speed_km_s))
+
+# Mostramos las primeras observaciones de la consulta final.
+head(morley_final)
+```
+
+# 26. Cierre: una forma de pensar el manejo de datos
+
+En este punto, más importante que memorizar sintaxis es reconocer una secuencia de preguntas:
+
+1. **¿Qué objeto tengo?** → `class()`, `is.data.frame()`.
+2. **¿Cómo está organizado?** → `dim()`, `names()`, `str()`, `glimpse()`.
+3. **¿Qué variable necesito?** → `$`, `select()`.
+4. **¿Qué observaciones necesito?** → `filter()`.
+5. **¿Necesito construir información nueva?** → `mutate()`, `if_else()`.
+6. **¿Necesito reorganizar los registros?** → `arrange()`.
+7. **¿Necesito contar categorías?** → `count()`.
+
+La siguiente etapa natural del curso será utilizar estas habilidades para comenzar el **análisis descriptivo**:
+
+\[
+\text{Base de datos}
+\longrightarrow
+\text{Tipos de variables}
+\longrightarrow
+\text{Tablas y frecuencias}
+\longrightarrow
+\text{Medidas descriptivas}
+\longrightarrow
+\text{Visualización}.
+\]
+
+El objetivo de esta guía se habrá cumplido si el estudiante puede tomar una base desconocida y, sin programar algoritmos desde cero, **reconocerla, consultarla, filtrarla, transformarla y construir una nueva versión de ella de manera controlada**.

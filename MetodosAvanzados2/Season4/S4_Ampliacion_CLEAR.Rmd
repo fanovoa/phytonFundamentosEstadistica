@@ -1,0 +1,974 @@
+---
+title: "Práctica 4B | IA educativa: predecir facilidad de lectura"
+subtitle: "Caso CLEAR Corpus, comparando LS, LAD y Huber en R"
+author: "Métodos alternativos de regresión lineal"
+date: "Noviembre de 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    self_contained: true
+    keep_md: true
+---
+
+<style id="s4-estilo-standalone">
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+html { scroll-behavior:smooth; }
+body { font-family:'DM Sans', 'DejaVu Sans', sans-serif; color:#1d2b42;
+       background:linear-gradient(145deg,#f3f9ff 0%,#fff 45%,#f8f3ff 100%);
+       font-size:16px; line-height:1.7; }
+h1,h2,h3,h4 { font-family:'Space Grotesk','DM Sans',sans-serif;
+               letter-spacing:-.02em; color:#132a4c; }
+h2 { margin-top:2.35em; padding-bottom:10px; border-bottom:2px solid #d4eaff; }
+h3 { margin-top:1.6em; color:#1670b9; }
+em { color:#33475f; }
+.main-container { max-width:1220px !important; }
+.hero {
+  color:#fff; padding:42px 50px 48px;
+  background:radial-gradient(circle at 92% 18%, #ffbc69 0%, transparent 27%),
+             radial-gradient(circle at 78% 85%, #f55c95 0%, transparent 25%),
+             linear-gradient(118deg,#0f3157 4%,#0875a2 57%,#12bda5 110%);
+  border-radius:22px; box-shadow:0 18px 45px rgba(19,65,94,.24);
+  position:relative; overflow:hidden; margin-bottom:35px;
+}
+.hero::before { content:""; position:absolute; width:260px; height:260px;
+  border:3px solid rgba(255,255,255,.19); border-radius:50%; right:25px; top:-93px; }
+.hero::after { content:""; position:absolute; width:190px; height:190px;
+  border:2px dashed rgba(255,255,255,.22); border-radius:50%; right:73px; bottom:-110px; }
+.hero h1 { color:white !important; font-size:40px; line-height:1.12;
+           max-width:810px; margin:12px 0 18px; }
+.hero p { font-size:19px; color:#e5faff; max-width:820px; margin:0 0 18px; }
+.hero .eyebrow { font-size:12px; font-weight:800; letter-spacing:.16em;
+                 color:#e5ffd1; text-transform:uppercase; }
+.pillrow span { display:inline-block; border:1px solid rgba(255,255,255,.36);
+  padding:3px 12px; margin:6px 7px 0 0; border-radius:24px;
+  font-size:12px; font-weight:700; background:rgba(255,255,255,.12); }
+.s4-ruta {
+  display:flex; align-items:stretch; flex-wrap:wrap; gap:13px;
+  margin:24px 0 30px; padding:18px; border-radius:16px;
+  background:linear-gradient(120deg,#e5f4ff,#f0fcf8 65%,#fff4e9);
+  border:1px solid #c7e2f1;
+  box-shadow:0 6px 26px rgba(30,96,130,.08);
+}
+.s4-ruta > div:not(.s4-ruta-flecha) {
+  flex:1 1 160px; min-width:145px; border-radius:12px;
+  background:#fff; border:1px solid #d5eafa;
+  padding:16px 18px; box-shadow:0 4px 13px rgba(20,75,110,.06);
+}
+.s4-ruta span { display:block; text-transform:uppercase; letter-spacing:.11em;
+  font-weight:800; font-size:11px; color:#1682a6; }
+.s4-ruta strong { display:block; font-family:'Space Grotesk','DM Sans',sans-serif;
+  color:#15375d; font-size:17px; margin:6px 0; }
+.s4-ruta small { color:#4a657c; font-size:12px; line-height:1.6; }
+.s4-ruta-flecha { display:flex; align-items:center; justify-content:center;
+  font-size:26px; color:#18aa9f; font-weight:800; }
+blockquote { background:#fff9eb; border-left:6px solid #ffab4f; margin:24px 0;
+             padding:13px 22px; border-radius:6px; color:#243650;
+             box-shadow:0 3px 14px rgba(100,70,10,.05); }
+blockquote p { margin:7px 0; }
+pre { background:#12213a !important; color:#e5f0ff !important;
+      padding:22px !important; border-radius:10px; border:0;
+      box-shadow:0 8px 20px rgba(13,31,63,.1); overflow-x:auto; }
+pre code { background:transparent !important; color:#ecf3ff !important;
+           font-size:13px; line-height:1.55; }
+pre:not(.r):not(.sourceCode) { background:#f4f9ff !important;
+                              color:#253957 !important; border:1px solid #d4e7f9; }
+/* Corrección de contraste: knitr imprime las SALIDAS como <pre><code>.
+   La regla general 'pre code' les daba letras casi blancas sobre fondo claro.
+   Se distingue explícitamente la consola de salida del código fuente R. */
+/* START S4-SALIDAS-LEGIBLES */
+pre:not(.r):not(.sourceCode) {
+  background:#f1f7ff !important;
+  color:#20334d !important;
+  border:1px solid #c8dff4 !important;
+  border-left:5px solid #11aa98 !important;
+  box-shadow:0 5px 15px rgba(25,74,115,.07);
+}
+pre:not(.r):not(.sourceCode) code,
+pre:not(.r):not(.sourceCode) code span {
+  background:transparent !important;
+  color:#20334d !important;
+  font-family:'DejaVu Sans Mono', 'Consolas', monospace;
+  font-size:13px;
+  font-weight:500;
+  line-height:1.65;
+  text-shadow:none !important;
+}
+pre:not(.r):not(.sourceCode) code { display:block; padding:0; }
+/* END S4-SALIDAS-LEGIBLES */
+code { background:#e9f3ff; padding:2px 5px; border-radius:4px;
+       color:#145b95; }
+table { width:100%; font-size:14px; background:white; border-radius:7px;
+        overflow:hidden; box-shadow:0 3px 16px rgba(20,65,100,.06); }
+thead { background:#0c75a8; color:#fff; }
+thead tr th { color:#fff; border-color:#0c75a8 !important; }
+tbody tr:nth-child(even) { background:#f1f8ff; }
+td,th { padding:10px 12px !important; }
+.figure { background:white; padding:13px; border-radius:12px; 
+          box-shadow:0 6px 26px rgba(18,54,89,.06); }
+p.caption { font-size:13px; color:#67798b; }
+.tocify { background:white; border-radius:14px; 
+          box-shadow:0 6px 20px rgba(20,80,110,.08); }
+.tocify .active { background:#0b9cbc !important; border-color:#0b9cbc !important; }
+div.alert { border-radius:12px; }
+@media(max-width:900px) {
+ .hero {padding:30px 24px;}
+ .hero h1 {font-size:32px;}
+ .hero p {font-size:16px;}
+  .s4-ruta-flecha {display:none;}
+  .s4-ruta > div:not(.s4-ruta-flecha) {flex:1 1 100%;}
+ pre code {font-size:12px;}
+}
+</style>
+
+<div class="hero">
+<span class="eyebrow">AMPLIACIÓN · IA EDUCATIVA · DATOS REALES</span>
+<h1>¿Qué tan fácil es leer un texto?</h1>
+<p>Una aplicación en evaluación de materiales de lectura: estadísticas clásicas, características del lenguaje y una respuesta derivada de juicios humanos.</p>
+</div>
+
+> **Una práctica de IA que se puede comprender sin dominar R.**
+> A lo largo del cuaderno explicaremos qué representa cada objeto, por qué
+> se escribe cada función, cuál es la ecuación matemática correspondiente
+> y cómo interpretar **las salidas que aparecen al compilar en RStudio**.
+> Los modelos utilizarán textos reales; los ejemplos numéricos inventados,
+> cuando aparezcan, estarán identificados como ejercicios de sintaxis.
+
+**Resultados de aprendizaje**
+
+1. Reconocer una variable de respuesta y tres características explicativas
+   obtenidas de textos.
+2. Traducir la fórmula que utiliza `lm()` a una ecuación estadística.
+3. Entender cómo R limpia, divide, transforma y organiza una base real.
+4. Leer los coeficientes de LS, LAD y Huber sin confundir sus objetivos.
+5. Validar un modelo antes de usar el conjunto de prueba.
+6. Distinguir un problema real de legibilidad de una **simulación
+   controlada** de etiquetas contaminadas.
+
+### Diccionario de R para empezar
+
+| Instrucción | Traducción a lenguaje cotidiano | Ejemplo en la práctica |
+|:--|:--|:--|
+| `a <- b` | Guardar el resultado `b` con el nombre `a`. | `train <- dat[...]` |
+| `tabla$campo` | Leer o añadir una columna de una tabla. | `dat$facilidad`, `dat$log_palabras` |
+| `tabla[["nombre"]]` | Leer una columna cuyo nombre contiene espacios o signos. | `raw[["Google WC"]]` |
+| `data.frame(...)` | Crear una tabla con columnas de la misma longitud. | `dat <- data.frame(...)` |
+| `c("A","B")` | Crear un vector que reúne varios elementos. | `columnas <- c(...)` |
+| `x[condicion, ]` | Conservar las filas para las que se cumple una condición. | `dat[dat$palabras>0, ]` |
+| `complete.cases(...)` | Marcar filas sin datos faltantes en los campos elegidos. | Limpiar el corpus |
+| `funcion <- function(x) {...}` | Definir una receta que se puede reutilizar. | `promedio_long_palabra()` |
+| `vapply(x,funcion,numeric(1))` | Aplicar una receta a cada elemento y exigir un número por elemento. | Calcular longitud media de palabra |
+| `lapply(lista,funcion)` | Repetir una receta y reunir los resultados en una lista. | Evaluar tres modelos |
+| `paquete::funcion()` | Ejecutar una función de un paquete específico. | `readxl::read_xlsx()` |
+| `print`, `summary`, `table` | Mostrar una tabla; resumir números; contar categorías. | Inspeccionar los datos |
+| `# explicación` | Comentario para el estudiante; R no lo ejecuta. | Todos los bloques de código |
+
+**Tres signos diferentes:** `<-` guarda, `=` dentro de una llamada
+indica un argumento (por ejemplo, `data=train`), y `==` compara si dos
+elementos son iguales. Para entender expresiones anidadas, léalas desde
+adentro: `round(mean(x),2)` calcula primero la media y luego la redondea.
+
+## 1. Problema y definición rigurosa de la respuesta
+
+Imaginemos una biblioteca digital que desea recomendar textos adecuados para sus estudiantes. El problema supervisado es estimar una **puntuación de facilidad de lectura** usando propiedades medibles del texto. La base real [CLEAR Corpus](https://github.com/scrosseye/CLEAR-Corpus) contiene aproximadamente 4.724 fragmentos textuales en inglés y una puntuación `BT_easiness` derivada de comparaciones de dificultad evaluadas por docentes.
+
+**Importante:** una puntuación **más alta** de `BT_easiness` indica mayor facilidad relativa de lectura según el modelo de juicios humanos. Esta escala **no es una probabilidad ni un porcentaje**; por tanto, no dividiremos por cinco ni la restringiremos a \([0,1]\).
+
+Fuente primaria: Crossley y colaboradores (2022). *A large-scaled corpus for assessing text readability*. [Artículo abierto](https://pmc.ncbi.nlm.nih.gov/articles/PMC10027808/). La base oficial puede usarse con reconocimiento y respetando la licencia indicada en su repositorio.
+
+### Los cuatro elementos de nuestro problema
+
+<div class="s4-ruta">
+  <div><span>ORIGEN</span><strong>Fragmento real</strong><small>Extracto de CLEAR</small></div>
+  <div class="s4-ruta-flecha">→</div>
+  <div><span>CARACTERÍSTICAS</span><strong>3 números</strong><small>Longitud · palabras/oración · letras</small></div>
+  <div class="s4-ruta-flecha">→</div>
+  <div><span>MODELO</span><strong>LS · LAD · Huber</strong><small>Predicción de facilidad relativa</small></div>
+</div>
+
+Cada fila \(i\) representa un texto; su respuesta es
+\(Y_i=\mathrm{BT\_easiness}_i\), que tomamos como una medida continua de
+facilidad **relativa**. Los tres predictores que construiremos son:
+
+\[
+\begin{aligned}
+X_{1i}&=\log(1+\text{número de palabras del texto }i),\\
+X_{2i}&=\frac{\text{palabras del texto }i}
+               {\text{oraciones del texto }i},\\
+X_{3i}&=\text{longitud media en letras de las palabras del texto }i.
+\end{aligned}
+\]
+
+Así, el modelo lineal múltiple que estimaremos tiene la forma
+
+\[
+\boxed{\;
+Y_i=\beta_0+\beta_1X_{1i}+\beta_2X_{2i}
++\beta_3X_{3i}+\varepsilon_i,\qquad
+\widehat Y_i=\widehat\beta_0+
+\widehat\beta_1X_{1i}+
+\widehat\beta_2X_{2i}+
+\widehat\beta_3X_{3i}. \;}
+\]
+
+Aquí \(\varepsilon_i\) es la diferencia entre la respuesta observada y
+la parte que explica el modelo lineal. Los métodos **no cambian las tres
+variables**, sino el criterio con que eligen los coeficientes:
+
+\[
+\begin{aligned}
+\widehat\beta_{\rm LS}
+ &=\arg\min_{\beta}\sum_i(Y_i-X_i^\top\beta)^2,\\
+\widehat\beta_{\rm LAD}
+ &=\arg\min_{\beta}\sum_i|Y_i-X_i^\top\beta|,\\
+\widehat\beta_{\rm Huber}
+ &\text{ minimiza una pérdida robusta cuadrática cerca de cero}\\
+ &\text{ y lineal para residuos grandes (con escala robusta).}
+\end{aligned}
+\]
+
+**Diferencia con STS:** aquí no imponemos que la predicción pertenezca
+a \([0,1]\), porque la respuesta de CLEAR tampoco pertenece a ese
+intervalo. Los errores y coeficientes se interpretan en **puntos del
+índice de facilidad**, no en porcentajes.
+
+### Antes de ejecutar el código
+
+- Abra este `.Rmd` en RStudio y use **Knit → Knit to HTML**.
+- Instale, si hace falta, `readxl`, `ggplot2`, `quantreg`, `MASS` y
+  `knitr` con `install.packages(...)` desde la consola; la descarga de
+  la base original requiere Internet la primera vez.
+- El bloque `clear-setup` prepara el entorno y comprueba paquetes.
+  `include=FALSE` significa que **sí se ejecuta**, pero se oculta
+  en el HTML para no interrumpir la lectura.
+- `set.seed(20261116)` permite repetir sorteos pseudoaleatorios;
+  `dir.create("datos",showWarnings=FALSE)` crea una carpeta local
+  donde se guardará la base descargada.
+
+```{r clear-setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE,
+                      fig.align="center", fig.width=10, fig.height=5.4, dev="svg")
+necesarios <- c("readxl","ggplot2","quantreg","MASS","knitr")
+faltantes <- necesarios[!vapply(necesarios,requireNamespace,logical(1),quietly=TRUE)]
+if (length(faltantes))
+  stop("Instale antes los paquetes: ", paste(faltantes,collapse=", "))
+dir.create("datos",showWarnings=FALSE)
+set.seed(20261116)
+```
+
+## 2. Descargar, validar y comprender la base original
+
+### ¿Cómo pasa una hoja Excel a ser un conjunto de observaciones?
+
+El archivo oficial contiene muchas columnas, pero **no todas entran en
+nuestro modelo**. Primero lo leemos tal como lo distribuyeron los
+autores, comprobamos los nombres y construimos una tabla con nombres
+de columnas sencillos para trabajar en clase.
+
+Hay tres tipos de datos distintos:
+
+| Columna de origen | Nombre que usaremos | Función en la práctica |
+|:--|:--|:--|
+| `Excerpt` | `texto` | Fragmento del que se obtienen las características |
+| `BT_easiness` | `facilidad` | **Variable de respuesta** que buscamos predecir |
+| `Google WC` | `palabras` | Conteo de palabras del texto |
+| `Sentence Count` | `oraciones` | Número de oraciones |
+| `Paragraphs` | `parrafos` | Número de párrafos; se inspecciona, pero no entra en la fórmula final |
+| `Categ` | `categoria` | Tipo de texto; útil para revisar diferencias por grupo |
+| `s.e.` | `error_etiqueta` | Incertidumbre declarada de la puntuación humana; **no es el residuo del modelo** |
+
+En R, `raw[["Google WC"]]` significa: **tome la columna cuyo título exacto
+es “Google WC”**. Los dobles corchetes resultan útiles cuando los nombres
+de columnas contienen espacios, puntos u otros caracteres.
+
+```{r clear-datos}
+# PASO 1. Descargar el archivo del repositorio ORIGINAL de los autores.
+destino <- "datos/CLEAR_corpus_final.xlsx"
+if (!file.exists(destino)) {
+  # mode="wb" evita que se alteren los bytes de un archivo Excel.
+  download.file(
+    "https://raw.githubusercontent.com/scrosseye/CLEAR-Corpus/main/CLEAR_corpus_final.xlsx",
+    destfile=destino, mode="wb", quiet=TRUE
+  )
+}
+
+# PASO 2. Leer los nombres tal como aparecen en la hoja de cálculo.
+raw <- readxl::read_xlsx(destino)
+# dim() muestra: (número de filas, número de columnas).
+print(dim(raw))
+# names() enumera los títulos originales; NO son estimaciones estadísticas.
+print(names(raw))
+
+# PASO 3. Extraer exactamente la respuesta y las variables de contexto.
+columnas <- c("Excerpt","BT_easiness","Google WC","Sentence Count",
+              "Paragraphs","Categ","s.e.")
+stopifnot(all(columnas %in% names(raw)))
+# data.frame() construye una tabla usando columnas del archivo.
+# as.character() guarda texto; as.numeric() guarda cantidades numéricas.
+dat <- data.frame(
+  texto=as.character(raw[["Excerpt"]]),
+  facilidad=as.numeric(raw[["BT_easiness"]]),
+  palabras=as.numeric(raw[["Google WC"]]),
+  oraciones=as.numeric(raw[["Sentence Count"]]),
+  parrafos=as.numeric(raw[["Paragraphs"]]),
+  categoria=as.character(raw[["Categ"]]),
+  error_etiqueta=as.numeric(raw[["s.e."]])
+)
+dat <- dat[complete.cases(dat[c("texto","facilidad","palabras",
+                                 "oraciones","parrafos")]),]
+# Eliminar conteos no positivos que impedirían dividir palabras/oraciones.
+dat <- dat[dat$palabras>0 & dat$oraciones>0 & dat$parrafos>0,]
+
+# PASO 4. Inspección estadística transparente.
+cat("Fragmentos con datos utilizables:",nrow(dat),"\n")
+print(summary(dat[c("facilidad","palabras","oraciones","parrafos")]))
+print(table(dat$categoria, useNA="ifany"))
+print(summary(dat$error_etiqueta))
+```
+
+### Interpretar `complete.cases()` y los filtros
+
+En la expresión `dat[c("texto","facilidad","palabras",...)]` el vector
+`c(...)` **elige columnas**. `complete.cases(...)` devuelve
+`TRUE` para cada fila sin valores faltantes en esos campos.
+Al escribir `dat[condicion, ]`, R conserva únicamente las filas que
+cumplen la condición; la coma indica que mantenemos **todas las
+columnas**. Después, `dat$palabras>0 & dat$oraciones>0` exige
+las dos condiciones a la vez (`&` significa **y**).
+
+**Una buena práctica:** documentar los criterios de exclusión. Las
+filas que falten no se sustituyen por textos inventados, y los nombres
+originales de la fuente no se modifican; solo creamos un nuevo objeto
+`dat` en la memoria de R.
+
+**Cómo leer la nueva línea “Fragmentos con datos utilizables”:**
+es el número real de filas retenidas después de limpiar. Puede ser
+menor que el número inicial mostrado por `dim(raw)`. Esa diferencia
+representa exclusiones por las reglas anteriores, no “textos
+que el modelo clasificó mal”.
+
+**Interpretación de `dim`:** la primera dimensión indica fragmentos en la tabla original; la segunda, campos disponibles, incluidos metadatos y fórmulas de legibilidad. Después de eliminar filas con datos faltantes, verifique cuántos fragmentos quedan en `dat` y documente su decisión.
+
+**Interpretación de `summary`:** la mediana de `facilidad` resume la localización de una variable que puede incluir valores negativos. `Google WC` es un recuento de palabras; `Sentence Count` y `Paragraphs` son conteos. Son variables explicativas, **no etiquetas de facilidad**.
+
+**Interpretación de `table(categoria)`:** permite comparar la composición por tipo de texto. Si una categoría domina, la evaluación global podría ocultar diferencias por género.
+
+**Interpretación de `summary(dat$error_etiqueta)`:** `s.e.` cuantifica la incertidumbre estimada de la etiqueta de facilidad derivada del modelo de comparación entre textos; no es el error que comete nuestra regresión ni el error estándar de una pendiente. Su presencia ofrece una posible ampliación a regresión ponderada según precisión de etiqueta, que sería una **pregunta distinta** de la robustez LAD/Huber que estudiamos aquí.
+
+**Cómo se lee `summary()` en la consola:**
+
+| Campo que imprime R | Lectura correcta |
+|:--|:--|
+| `Min.` | Menor valor observado entre las filas retenidas |
+| `1st Qu.` | Primer cuartil: alrededor del 25 % queda por debajo |
+| `Median` | Mediana o valor central |
+| `Mean` | Promedio aritmético |
+| `3rd Qu.` | Tercer cuartil |
+| `Max.` | Mayor valor observado |
+| `NA's` (si aparece) | Cantidad de valores que faltan en esa variable |
+
+Estas cifras **describen el corpus**; no dicen todavía si un modelo
+predice bien. Por su parte, `table(dat$categoria)` cuenta los textos
+por grupo: ayuda a detectar posibles desequilibrios antes de modelar.
+
+```{r clear-ejemplos}
+# PASO 5. Inspeccionar ejemplos contrastantes SIN eliminar el contenido textual.
+# order() devuelve posiciones en orden de facilidad creciente.
+ord <- order(dat$facilidad)
+# head(ord,2) = primeras dos posiciones; tail(ord,2) = últimas dos.
+ejemplos <- dat[c(head(ord,2),tail(ord,2)),
+                c("facilidad","palabras","oraciones","texto")]
+# Recortar SOLO la visualización: 130 caracteres, no la fuente original.
+ejemplos$texto <- substr(ejemplos$texto, 1, 130)
+print(ejemplos, row.names=FALSE)
+```
+
+**Lectura aplicada:** en los ejemplos con puntaje alto, los docentes juzgaron el texto más fácil que los fragmentos con puntaje bajo. No suponga que una oración corta garantiza facilidad ni que el texto más difícil equivale a uno de «mala calidad».
+
+**En R:** `order(dat$facilidad)` no reescribe la tabla; devuelve un
+vector de **posiciones de filas** ordenadas por puntaje. `head(ord,2)`
+toma las dos primeras posiciones y `tail(ord,2)` las dos últimas.
+El código muestra los extremos de la distribución **para conocer
+la variable de respuesta**, no para excluirlos del entrenamiento
+como si fueran valores erróneos.
+
+## 3. Ingeniería de características textuales
+
+**Ingeniería de características** significa convertir información cruda
+(el texto de un documento) en valores numéricos que puedan utilizar
+los modelos de regresión. No es una propiedad misteriosa de una red:
+son operaciones matemáticas que nosotros elegimos, que deben
+justificarse y pueden resultar insuficientes.
+
+### Practicar una función sencilla de R
+
+Antes de procesar miles de textos, trabajemos con un vector
+**inventado únicamente para aprender sintaxis**:
+
+```{r clear-sintaxis-inicial}
+# Crear dos ejemplos didácticos: NO son filas del corpus oficial.
+mini_textos <- c("El sol sale.","La luna ilumina la noche.")
+# strsplit() divide cada cadena siguiendo una expresión de separación.
+print(strsplit(mini_textos," "))
+# nchar() cuenta caracteres; aquí contamos los de la primera frase completa.
+print(nchar(mini_textos[1]))
+# c() y data.frame() permiten armar una tabla pequeña con dos columnas.
+mini_tabla <- data.frame(texto=mini_textos,oraciones=c(1,1))
+print(mini_tabla,row.names=FALSE)
+```
+
+**Qué debe ver:** `strsplit()` devuelve una **lista**: un conjunto de
+palabras para cada frase. `nchar(mini_textos[1])` cuenta también
+espacios y el punto final, **no cuenta letras por palabra**.
+Precisamente por eso la función real dividirá primero el texto
+en palabras y después promediará sus longitudes.
+
+### El significado de cada característica
+
+| Predictor | Definición matemática | Ejemplo didáctico |
+|:--|:--|:--|
+| `log_palabras` | \(\log(1+w_i)\) | Para \(w_i=99\) palabras, vale \(\log(100)\approx4.605\). |
+| `palabras_por_oracion` | \(w_i/s_i\) | Si hay 100 palabras y 5 oraciones, vale 20. |
+| `long_palabra` | \(\frac{1}{m_i}\sum_{j=1}^{m_i}\text{letras}(p_{ij})\) | Para las palabras «sol» y «luna», vale \((3+4)/2=3.5\). |
+
+`log1p(x)` calcula \(\log(1+x)\) (logaritmo natural): **no** es
+el logaritmo en base diez. La transformación comprime los valores
+de longitud más grandes y admite cero, aunque para este análisis
+ya excluimos recuentos no positivos. Es una decisión de modelado,
+no una normalización de la respuesta.
+
+```{r clear-features}
+# PASO 1. Una función de R que cuenta longitud media de palabra.
+promedio_long_palabra <- function(texto) {
+  # Convertir todas las letras en minúsculas.
+  # Separar donde aparezcan caracteres que NO sean letras.
+  tokens <- unlist(strsplit(tolower(texto),"[^[:alpha:]]+"))
+  # nzchar(token) es TRUE si el token no está vacío.
+  tokens <- tokens[nzchar(tokens)]
+  # Si el texto no contiene letras reconocibles, declarar NA.
+  if (!length(tokens)) return(NA_real_)
+  # nchar() cuenta las letras de CADA token; mean() calcula la media.
+  mean(nchar(tokens))
+}
+
+# PASO 2. Crear rasgos cuantitativos; usar log evita escalas muy distintas.
+# log1p(w) es igual a log(1+w); NO es log(w).
+dat$log_palabras <- log1p(dat$palabras)
+# La división se realiza fila a fila para todo el vector numérico.
+dat$palabras_por_oracion <- dat$palabras/dat$oraciones
+# Repetir la función: un único promedio numérico para CADA texto.
+dat$long_palabra <- vapply(dat$texto,promedio_long_palabra,numeric(1))
+# Quitar filas incompletas antes de separar los conjuntos.
+dat <- dat[complete.cases(dat[c("facilidad","log_palabras",
+                                "palabras_por_oracion","long_palabra")]),]
+
+# PASO 3. Reservar entrenamiento, validación y prueba ANTES de estimar.
+set.seed(523)
+# Mezclar posiciones de filas, de 1 a nrow(dat), sin cambiar su contenido.
+orden <- sample.int(nrow(dat))
+# floor() redondea hacia abajo el 70 % y el 15 % de textos.
+n_ent <- floor(.70*nrow(dat))
+n_val <- floor(.15*nrow(dat))
+# Indices de train, valid y test no se repiten ni se traslapan.
+train <- dat[orden[seq_len(n_ent)],]
+valid <- dat[orden[seq.int(n_ent+1,n_ent+n_val)],]
+test  <- dat[orden[seq.int(n_ent+n_val+1,nrow(dat))],]
+print(data.frame(Particion=c("Train","Validacion","Test"),
+                 Textos=c(nrow(train),nrow(valid),nrow(test))))
+```
+
+### Leer la función sin miedo
+
+`promedio_long_palabra <- function(texto) {...}` crea una función propia:
+si usted le entrega un texto, devuelve **un número**.
+
+1. `tolower(texto)` convierte letras mayúsculas a minúsculas.
+2. `strsplit(...,"[^[:alpha:]]+")` separa palabras cuando encuentra
+   uno o más caracteres que no son letras (espacios, signos, etc.);
+   `unlist()` convierte el resultado en un vector sencillo.
+3. `tokens[nzchar(tokens)]` conserva solo palabras **no vacías**.
+4. `if (!length(tokens)) return(NA_real_)` devuelve un dato faltante
+   si no se encontró ninguna palabra. El símbolo `!` significa
+   **negación**.
+5. `nchar(tokens)` cuenta caracteres de cada palabra y `mean()`
+   calcula la longitud media.
+6. `vapply(dat$texto,promedio_long_palabra,numeric(1))` recorre
+   **cada fila de texto**; la parte `numeric(1)` exige que cada llamada
+   produzca un único valor numérico.
+
+**Limitación consciente:** esta definición es una característica
+aproximada. La forma de identificar letras puede variar según
+el idioma y la configuración regional de R. Además, contar letras
+no mide por sí solo la comprensión de un texto.
+
+**Interpretación:** `log_palabras` mide volumen textual comprimido; `palabras_por_oracion` aproxima densidad sintáctica, y `long_palabra` aproxima complejidad léxica. Son medidas imperfectas: el vocabulario técnico puede contener palabras cortas y un texto breve puede ser difícil.
+
+### ¿Para qué tres particiones?
+
+| Partición | Cerca de | ¿Para qué se usa? | ¿Qué se debe evitar? |
+|:--|--:|:--|:--|
+| `train` | 70 % | Estimar coeficientes de LS, LAD y Huber. | Ajustar usando validación o prueba. |
+| `valid` | 15 % | Comparar MAE y escoger un método. | Presentar su error como evaluación final independiente. |
+| `test` | 15 % | Medir el rendimiento del método ya escogido. | Cambiar el ganador después de conocer esta tabla. |
+
+`set.seed(523)` hace reproducible la **mezcla aleatoria** de posiciones.
+`sample.int(nrow(dat))` devuelve una permutación de los números de fila.
+Después `seq_len(n_ent)` selecciona las primeras posiciones;
+`seq.int(a,b)` forma un recorrido entre los extremos indicados.
+`floor()` redondea los tamaños hacia abajo, por lo que el conjunto
+de prueba recibe las observaciones que restan.
+
+**Cómo interpretar la tabla de particiones:** los tres recuentos
+deben sumar el total de textos que quedó después de limpiar y
+construir las variables. No hay una partición nueva para cada método:
+los tres se ajustan y evalúan en **exactamente los mismos textos**.
+
+```{r clear-grafico, fig.cap="Asociación descriptiva entre facilidad de lectura y longitud media de palabra."}
+ggplot2::ggplot(train,ggplot2::aes(x=long_palabra,y=facilidad)) +
+  ggplot2::geom_point(alpha=.25,color="#2788EF") +
+  ggplot2::geom_smooth(method="lm",colour="#EA4C91",se=FALSE,linewidth=1.2) +
+  ggplot2::labs(title="La longitud de palabra explica una parte del problema",
+                x="Longitud media de palabra",y="Facilidad relativa de lectura") +
+  ggplot2::theme_minimal(base_size=14)
+```
+
+**Descifrar la gráfica en R:**
+
+- `ggplot(train,aes(x=long_palabra,y=facilidad))`: usar **solo train**
+  para dibujar; asignar longitud de palabra al eje horizontal
+  y facilidad al eje vertical.
+- `geom_point(alpha=.25,...)`: dibujar cada texto como un punto
+  semitransparente; la transparencia ayuda cuando muchos puntos
+  coinciden.
+- `geom_smooth(method="lm",se=FALSE,...)`: agregar **una recta
+  descriptiva LS**, sin banda de error estándar. Esta recta usa
+  solo un predictor; **no es aún** el modelo múltiple de tres
+  características que compararemos después.
+- `labs(...)`: títulos y etiquetas legibles;
+  `theme_minimal(base_size=14)`: formato de la figura.
+
+**Cómo leer la gráfica:** un patrón promedio decreciente sugeriría menor facilidad en textos de palabras largas, pero las excepciones muestran por qué un modelo necesita más variables. Una pendiente descriptiva no demuestra un mecanismo causal.
+
+## 4. Comparación predictiva real: LS, LAD y Huber
+
+### Traducir la sintaxis `facilidad ~ ...`
+
+En R, el símbolo `~` de una fórmula se lee **“la variable de la izquierda
+se modela utilizando las variables de la derecha”**. Por tanto:
+
+```{r clear-lectura-formula, eval=FALSE}
+# La fórmula NO estima coeficientes: solo describe qué se estimará.
+f <- facilidad ~ log_palabras + palabras_por_oracion + long_palabra
+print(f)
+```
+
+representa la ecuación
+
+\[
+\widehat{\operatorname{facilidad}}_i=
+\widehat\beta_0+
+\widehat\beta_1\log(1+\operatorname{palabras}_i)+
+\widehat\beta_2\frac{\operatorname{palabras}_i}
+{\operatorname{oraciones}_i}+
+\widehat\beta_3\operatorname{long\_palabra}_i.
+\]
+
+El signo `+` dentro de la **fórmula de R** significa “agregar otro
+predictor”. No implica sumar datos antes de construir el modelo;
+R estimará un coeficiente diferente para cada columna.
+
+La misma fórmula se entrega a tres procedimientos de estimación:
+
+| Instrucción | ¿Qué minimiza o estima? | ¿Cómo debe leerse? |
+|:--|:--|:--|
+| `lm(f,data=train)` | Suma de residuos al cuadrado | Modelo LS de la **media condicional**, bajo especificación adecuada |
+| `rq(f,tau=.5,data=train)` | Suma de residuos absolutos | Modelo LAD de la **mediana condicional** |
+| `rlm(f,method="M",psi=psi.huber)` | Pérdida robusta con escala interna estimada | Ajuste de localización robusto frente a grandes residuos |
+
+No se debe asumir que el umbral interno de `MASS::rlm` coincide
+numéricamente con el \(\delta=0.15\) usado en la red neuronal del
+módulo anterior: allí la respuesta era STS y aquí es la escala de CLEAR.
+
+```{r clear-ajustar}
+# PASO 1. Todas las técnicas reciben la misma fórmula múltiple.
+f <- facilidad ~ log_palabras + palabras_por_oracion + long_palabra
+
+# PASO 2. Ajustar cada método SOLO con textos de entrenamiento.
+# lm() estima los coeficientes mediante mínimos cuadrados.
+m_ls <- lm(f, data=train)
+# rq(...,tau=.5) estima el cuantil 0.5, es decir, la mediana.
+m_lad <- quantreg::rq(f, tau=.5, data=train)
+# rlm() usa estimación robusta M; psi.huber limita influencia de
+# residuos grandes, después de ajustar por su escala robusta.
+m_huber <- MASS::rlm(f,data=train,method="M",
+                     psi=MASS::psi.huber,maxit=200)
+
+# PASO 3. Imprimir las tres salidas.
+# summary() no vuelve a entrenar: resume el modelo ya ajustado.
+summary(m_ls)
+# se="boot" pide incertidumbre por remuestreo; R=150 repeticiones.
+summary(m_lad,se="boot",R=150)
+# La salida robusta no debe leerse como tabla clásica de valores p.
+summary(m_huber)
+```
+
+**Qué significan los argumentos:** `data=train` determina de qué
+tabla se toman los predictores y la respuesta; `tau=.5` identifica
+el cuantil 50 %; `maxit=200` establece el máximo de iteraciones
+del algoritmo robusto. La notación `MASS::psi.huber` es una
+**función del paquete MASS**, no un nombre de columna.
+
+### Cómo interpretar los resultados
+
+**LS:**
+
+- `(Intercept)` predice la facilidad para valores explicativos cero. Puede no tener sentido práctico porque los textos reales tienen conteos positivos; para interpretar un texto típico, use `predict` con sus medias o medianas.
+- `log_palabras`: asociación con el logaritmo del número de palabras, manteniendo constantes las demás características. Un aumento de una unidad en este logaritmo **no** significa una palabra adicional.
+- `palabras_por_oracion`: diferencia estimada de facilidad ante **una palabra más por oración**, con lo demás constante.
+- `long_palabra`: diferencia estimada ante una letra adicional en la longitud media de palabra.
+- `Std. Error`, `t value`, `Pr(>|t|)`: precisión e inferencia clásica bajo supuestos; **no convierten** una asociación observacional en causalidad.
+- `Residual standard error` expresa magnitud de residuos en puntos del índice CLEAR; `R-squared` muestra ajuste en train, no rendimiento en test.
+
+**LAD:** las mismas pendientes describen cambios en la **mediana condicional**, y los errores estándar/bootstrap requieren reconocer la variabilidad de remuestreo.
+
+**Huber:** las pendientes describen el ajuste robusto con una pérdida intermedia. `MASS::rlm` no produce, por defecto, valores p clásicos comparables con los de `lm`. Consulte los pesos robustos si necesita saber qué registros influyeron menos.
+
+### Guía para leer la consola de resultados
+
+Las tres funciones pueden imprimir encabezados diferentes. Esta guía le
+permite localizar los elementos principales:
+
+| Aparece en la salida | Qué debe interpretar | Qué **no** demuestra |
+|:--|:--|:--|
+| `(Intercept)` | Nivel predicho cuando las tres explicativas valen cero. | Que exista un texto real con esas características. |
+| `Estimate` | Coeficiente ajustado, en puntos CLEAR por unidad del predictor. | Que el predictor provoque el cambio. |
+| `Std. Error` | Incertidumbre estimada del coeficiente según el procedimiento. | Que los tres modelos compartan idéntica inferencia. |
+| `t value` / `Pr(>|t|)` de LS | Estadísticos de una prueba bajo supuestos del modelo LS. | Que una asociación sea causal o útil para predecir. |
+| `Residual standard error` de LS | Medida del tamaño de residuos de entrenamiento. | El MAE de prueba. |
+| `Multiple R-squared` de LS | Proporción de variabilidad explicada en la muestra de ajuste. | Que el método generalice mejor que LAD. |
+| `Value` y `Std. Error` de LAD | Estimación de la pendiente de mediana e incertidumbre bootstrap. | Que una pendiente describa necesariamente la media. |
+| `Value` y `Std. Error` de Huber | Coeficiente robusto y aproximación de incertidumbre. | Un valor p clásico automático. |
+
+**Ejemplo inventado para practicar la interpretación:** si
+\(\widehat\beta_2=-0.08\) fuera el coeficiente de
+`palabras_por_oracion`, diríamos: “al aumentar en una palabra la
+longitud media de una oración y **mantener las otras variables
+constantes**, la facilidad predicha disminuye 0.08 puntos CLEAR”.
+Este valor **no es un resultado calculado del corpus**; el estudiante
+debe sustituirlo por el coeficiente que realmente aparece al ejecutar R.
+
+Para `log_palabras`, pasar de 99 a 100 palabras representa un cambio
+
+\[
+\Delta X_1=\log(101)-\log(100),
+\]
+
+que es bastante menor que una unidad. Por eso **no es correcto**
+interpretar su coeficiente como si corresponda a “una palabra más”.
+
+```{r clear-interpretar}
+# PASO 4. Imprimir frases con valores REALES calculados por los estudiantes.
+# for (nom in c(...)) recorre los nombres de los tres predictores.
+for (nom in c("log_palabras","palabras_por_oracion","long_palabra")) {
+  # coef(m_ls)[[nom]] extrae el valor estimado del coeficiente de "nom".
+  # sprintf("%+.4f",valor) escribe signo y cuatro decimales.
+  cat(sprintf(
+    "LS: si %s aumenta una unidad con las demás constantes, la facilidad estimada cambia %+.4f puntos CLEAR.\n",
+    nom, coef(m_ls)[[nom]]
+  ))
+}
+cat(sprintf("R² ajustado LS en entrenamiento: %.3f.\n",
+            summary(m_ls)$adj.r.squared))
+cat(sprintf("Escala robusta interna de Huber: %.3f.\n",m_huber$s))
+```
+
+**Cómo leer la salida de frases:** `sprintf()` crea texto
+formateado; `%s` coloca el nombre de la variable y `%+.4f`
+muestra un número con signo y cuatro decimales. La función `cat()`
+imprime las frases ya construidas. La salida cambia al ejecutar
+R con los datos reales, **no está escrita a mano**. Por último,
+`summary(m_ls)$adj.r.squared` extrae el \(R^2\) ajustado de
+LS, y `m_huber$s` es una estimación de escala de residuos de Huber,
+**no** la facilidad de lectura.
+
+### Predicción para un texto de características típicas
+
+Leer coeficientes es útil, pero a un docente suele interesarle más
+una **predicción completa**. Construiremos un perfil con la mediana
+de cada predictor del entrenamiento. Es un perfil **ilustrativo**:
+la combinación de medianas no tiene por qué coincidir con un fragmento
+específico del corpus.
+
+```{r clear-perfil-referencia}
+# PASO 1. Un data.frame con UNA fila y los nombres exactos de la fórmula.
+perfil <- data.frame(
+  log_palabras=median(train$log_palabras),
+  palabras_por_oracion=median(train$palabras_por_oracion),
+  long_palabra=median(train$long_palabra))
+print(round(perfil,3))
+
+# PASO 2. Predecir usando cada modelo YA entrenado.
+# newdata=perfil significa: pronosticar ese nuevo conjunto de rasgos.
+pred_perfil <- data.frame(
+  Modelo=c("LS","LAD","Huber"),
+  Facilidad_predicha=c(
+    as.numeric(predict(m_ls,newdata=perfil)),
+    as.numeric(predict(m_lad,newdata=perfil)),
+    as.numeric(predict(m_huber,newdata=perfil))))
+print(transform(pred_perfil,
+                Facilidad_predicha=round(Facilidad_predicha,3)),
+      row.names=FALSE)
+```
+
+**Cómo interpretar las dos tablas:** la primera describe al
+texto típico hipotético en unidades de los **predictores**;
+la segunda expresa tres puntuaciones de facilidad esperadas en
+**la escala original de CLEAR**. Las tres pueden diferir aunque
+compartan exactamente la misma fila de entrada. `predict()` no
+modifica los coeficientes originales, solo los aplica.
+
+## 5. Validación para elegir y prueba para confirmar
+
+### Antes de ejecutar: entender las métricas
+
+Sean \(y_i\) la facilidad observada y \(\widehat y_i\) la
+facilidad predicha para \(n\) textos. Calcularemos:
+
+\[
+\begin{aligned}
+\operatorname{MAE}
+ &=\frac1n\sum_{i=1}^n |y_i-\widehat y_i|,\\
+\operatorname{RMSE}
+ &=\sqrt{\frac1n\sum_{i=1}^n(y_i-\widehat y_i)^2},\\
+\rho_{\rm Spearman}
+ &=\operatorname{correlación}(\operatorname{rangos}(y),
+                             \operatorname{rangos}(\widehat y)).
+\end{aligned}
+\]
+
+**En palabras sencillas:**
+
+- MAE: ¿en cuánto se equivoca el modelo **por término medio**?
+- RMSE: ¿qué sucede si damos mayor importancia a los **errores muy grandes**?
+- Spearman: ¿el modelo ordena los textos de manera similar a los
+  juicios humanos, incluso cuando los valores puntuales no son exactos?
+
+MAE y RMSE deben expresarse en **puntos de facilidad CLEAR**.
+Spearman, en cambio, no tiene esas unidades y va de -1 a 1.
+
+<div class="s4-ruta">
+  <div><span>TRAIN</span><strong>Estimar</strong><small>Tres modelos, mismos textos</small></div>
+  <div class="s4-ruta-flecha">→</div>
+  <div><span>VALIDACIÓN</span><strong>Elegir</strong><small>Menor MAE antes de mirar test</small></div>
+  <div class="s4-ruta-flecha">→</div>
+  <div><span>PRUEBA</span><strong>Reportar</strong><small>Evaluación final sin reelección</small></div>
+</div>
+
+```{r clear-metricas}
+# PASO 1. Métricas en la unidad original del índice CLEAR.
+# y = valores humanos; p = predicciones; nom = nombre del modelo.
+evaluar <- function(y,p,nom) data.frame(
+  Modelo=nom,MAE=mean(abs(y-p)),
+  RMSE=sqrt(mean((y-p)^2)),
+  Spearman=unname(cor(y,p,method="spearman")))
+
+# PASO 2. Guardar modelos diferentes dentro de UNA lista con nombres.
+modelos <- list(LS=m_ls,LAD=m_lad,Huber=m_huber)
+tabla_para <- function(base) {
+  # lapply() aplica la MISMA función de evaluación a los tres modelos.
+  # predict(...,newdata=base) NO vuelve a entrenar coeficientes.
+  # do.call(rbind,...) apila las filas de resultados.
+  do.call(rbind, lapply(names(modelos),function(nom)
+    evaluar(base$facilidad, as.numeric(predict(modelos[[nom]],newdata=base)),
+            nom)))
+}
+# Validación: ordenar por menor MAE (nuestro criterio decidido de antemano).
+valores_valid <- tabla_para(valid)
+print(valores_valid[order(valores_valid$MAE),],row.names=FALSE)
+# which.min() devuelve la posición del valor MAE más pequeño.
+elegido <- valores_valid$Modelo[which.min(valores_valid$MAE)]
+cat("Elegido por MAE de validación:",elegido,"\n")
+
+# PASO 2. Abrir test después de congelar la elección.
+valores_test <- tabla_para(test)
+print(valores_test[order(valores_test$MAE),],row.names=FALSE)
+```
+
+### Traducir las operaciones de listas de R
+
+Este bloque utiliza tres ideas recurrentes del lenguaje R:
+
+1. `modelos <- list(LS=m_ls,LAD=m_lad,Huber=m_huber)` agrupa tres
+   objetos de modelos en una **lista identificada por nombres**.
+2. `names(modelos)` devuelve esos nombres. `lapply(names(modelos),
+   function(nom) ...)` ejecuta una receta tres veces; en cada
+   repetición `modelos[[nom]]` elige el modelo correspondiente.
+3. `do.call(rbind, resultados)` transforma una **lista de tablas**
+   en una única tabla, apilando filas.
+4. `order(valores_valid$MAE)` devuelve las posiciones desde el error
+   menor al mayor; `which.min(valores_valid$MAE)` devuelve **solo**
+   la posición del mínimo.
+
+La **elección es un procedimiento**, no una impresión:
+
+\[
+\widehat m
+=\underset{m\in\{\mathrm{LS,LAD,Huber}\}}{\arg\min}
+\operatorname{MAE}_{\mathrm{validación}}(m).
+\]
+
+Primero fijamos \(\widehat m\), después estimamos su rendimiento con
+prueba. La tabla de prueba muestra los tres modelos **por transparencia**,
+pero **no se usa** para cambiar la elección inicial.
+
+**Discusión de los resultados observados:** el método elegido antes de abrir
+prueba fue **`r elegido`**, pues tuvo el menor MAE en validación.
+Su error en prueba fue **`r sprintf('%.4f', valores_test$MAE[valores_test$Modelo==elegido])`**,
+mientras el menor MAE observado entre los tres métodos de prueba fue
+**`r sprintf('%.4f', min(valores_test$MAE))`**. La posible inversión en el orden
+es una lección sobre variabilidad entre particiones: **no se permite
+reseleccionar usando test**, y diferencias tan pequeñas deben interpretarse
+con prudencia, no como una victoria concluyente.
+
+### Interpretación de la tabla
+
+- **MAE**: error absoluto promedio de predicción en **puntos CLEAR**, no en porcentaje ni en unidades de legibilidad escolar.
+- **RMSE**: también se mide en puntos CLEAR, con mayor penalización a predicciones muy equivocadas.
+- **Spearman**: indica capacidad de **ordenar** textos desde más difíciles hasta más fáciles, y puede ser importante para un recomendador educativo.
+- Un método puede dominar MAE pero perder en RMSE. Debata qué error tiene mayores consecuencias al recomendar materiales a estudiantes.
+- Si el método ganador en test difiere del preseleccionado en validación, **no reemplace retroactivamente la elección**. Documente la discrepancia como incertidumbre del procedimiento de selección.
+
+**Ejemplo didáctico inventado (no es salida real):** si la
+validación mostrara `MAE_LS = 0.81`, `MAE_LAD = 0.76` y
+`MAE_Huber = 0.78`, se escogería **LAD** antes de abrir prueba.
+Aunque en la prueba LS obtuviera 0.74 y LAD 0.75, el método
+seleccionado seguiría siendo LAD. Reportaríamos el resultado
+de LAD y dejaríamos constancia de la diferencia entre tablas,
+sin reescribir el procedimiento después de ver sus resultados.
+
+## 6. Desafío de robustez, sin falsificar la fuente
+
+### Separar claramente realidad y simulación
+
+El CLEAR Corpus procede de una fuente real. Lo que sigue **no pretende
+modificar ni corregir** a sus autores: hacemos una copia de las etiquetas
+de entrenamiento y **simulamos** valores excepcionalmente desplazados
+para estudiar qué hace cada método ante residuos grandes.
+
+El experimento se diseña como:
+
+\[
+Y_i^{\mathrm{simulado}}=
+\begin{cases}
+Y_i+S_i(3s_Y), & i\in I_{\mathrm{perturbado}},\\
+Y_i,&\text{en otro caso},
+\end{cases}
+\]
+
+donde \(I_{\mathrm{perturbado}}\) es una muestra aleatoria de
+aproximadamente 8 % de las filas de entrenamiento,
+\(S_i\in\{-1,+1\}\) se sortea con igual probabilidad y
+\(s_Y\) es la desviación estándar de la facilidad en entrenamiento.
+**Ni validación ni prueba se alteran.**
+
+```{r clear-ruido}
+# PASO 1. Copiar etiquetas para simular contaminación SOLO en train.
+set.seed(771)
+# Una copia distinta evita alterar las etiquetas originales.
+train_ruido <- train
+# sample.int() elige posiciones sin repetición por defecto.
+filas_ruido <- sample.int(nrow(train_ruido),round(.08*nrow(train_ruido)))
+
+# PASO 2. Sumar de forma artificial una perturbación de gran tamaño.
+# La base oficial NO contiene esta columna y NO se edita el archivo descargado.
+# sd() calcula la desviación estándar en la escala de facilidad.
+tam <- 3*sd(train$facilidad)
+# sample(c(-tam,tam), ...,replace=TRUE) selecciona un signo para cada fila.
+train_ruido$facilidad[filas_ruido] <- train_ruido$facilidad[filas_ruido]+
+  sample(c(-tam,tam),length(filas_ruido),replace=TRUE)
+
+# PASO 3. Repetir los tres métodos con entradas idénticas.
+# Los textos y las características NO cambian; solo algunas etiquetas train.
+ruido <- list(
+  LS=lm(f,data=train_ruido),
+  LAD=quantreg::rq(f,tau=.5,data=train_ruido),
+  Huber=MASS::rlm(f,data=train_ruido,psi=MASS::psi.huber,
+                   method="M",maxit=200))
+resultado_ruido <- do.call(rbind,lapply(names(ruido),function(nom)
+  evaluar(valid$facilidad,predict(ruido[[nom]],newdata=valid),nom)))
+# merge() empareja cada método original con su versión perturbada.
+comparacion <- merge(valores_valid[c("Modelo","MAE")],
+                     resultado_ruido[c("Modelo","MAE")],
+                     by="Modelo",suffixes=c("_original","_simulado"))
+# Una resta positiva indica aumento de error en la validación LIMPIA.
+comparacion$deterioro <- comparacion$MAE_simulado-comparacion$MAE_original
+print(comparacion,row.names=FALSE)
+```
+
+**Descifrar las operaciones difíciles:**
+
+- `round(.08*nrow(train_ruido))` calcula el número de observaciones
+  perturbadas, redondeado al entero más cercano.
+- `train_ruido$facilidad[filas_ruido]` selecciona los valores
+  de facilidad de **esas posiciones concretas**.
+- `replace=TRUE` permite que los signos `-tam` o `+tam` se repitan;
+  **no** significa que se repitan las filas muestreadas.
+- `merge(...,by="Modelo")` empareja por nombre las filas de LS,
+  LAD y Huber de las dos condiciones experimentales.
+- `suffixes=c("_original","_simulado")` distingue las columnas
+  de MAE de cada condición.
+
+**Interpretación:** un `deterioro` positivo indica que el error en validación limpia aumentó tras la perturbación simulada. No se debe presentar esta simulación como evidencia de errores reales en los juicios humanos del CLEAR Corpus.
+
+Un `deterioro` cercano a cero sugiere poca sensibilidad de MAE
+de validación **en este experimento particular**. Un valor
+negativo significa que hubo una mejora de MAE después de
+perturbar etiquetas, lo que puede ocurrir por azar: **no
+es evidencia de que contaminar etiquetas mejore los datos**.
+
+**Pregunta clave:** si Huber o LAD soportan mejor esta perturbación,
+¿eso los convierte automáticamente en ganadores del problema
+original? **No**: debemos separar el resultado de una simulación
+de sensibilidad del rendimiento sobre las etiquetas originales.
+
+## 7. Ejercicios para discusión
+
+### Ejercicios acompañados para quien comienza en R
+
+Antes de responder las preguntas de investigación, complete:
+
+1. Copie la fórmula de R `f <- facilidad ~ ...` y escriba su
+   equivalente matemático completo con intercepto y tres pendientes.
+2. En `readxl::read_xlsx(destino)`, identifique el **paquete**,
+   la **función** y el **archivo** que se lee.
+3. Explique por qué `dat[dat$palabras>0, ]` conserva **filas** y
+   no columnas. ¿Qué hace la coma final?
+4. Justifique por qué `vapply(...,numeric(1))` debe producir
+   exactamente **un valor por texto**.
+5. Localice `tau=.5` y explique qué relación tiene con la
+   mediana condicional estimada por LAD.
+6. En la tabla de validación, identifique el mejor método
+   por MAE. Compruebe que su nombre coincide con la salida de
+   `cat("Elegido por MAE de validación:",...)`.
+7. Explique en qué unidad están MAE y RMSE. ¿Por qué
+   no podemos presentarlos como probabilidades de comprensión?
+8. Localice `train_ruido <- train`. ¿Por qué creamos una copia
+   en vez de editar directamente el archivo Excel original?
+
+1. Seleccione el método por MAE de validación y explique el valor de ese error a un docente que desea recomendar lecturas apropiadas.
+2. ¿Por qué sería incorrecto interpretar `BT_easiness=1.5` como «150 % de facilidad»?
+3. ¿Cuál pendiente sería más fácil de comunicar a un profesor: `palabras_por_oracion` o `log_palabras`? ¿Por qué?
+4. Inspeccione pesos de Huber, muestre dos textos con pesos bajos y discuta si podrían contener vocabulario especializado.
+5. Compare el error por categoría `Categ`. ¿Es posible que el promedio global esconda peor desempeño en textos informativos?
+6. **Extensión de IA:** sustituya las variables superficiales por embeddings de oraciones preentrenados y use validación antes de abrir test. Compare justicia, costo computacional e interpretabilidad.
+
+### Fuentes y trazabilidad
+
+- Repositorio y datos oficiales: https://github.com/scrosseye/CLEAR-Corpus
+- Publicación de datos: https://pmc.ncbi.nlm.nih.gov/articles/PMC10027808/
+- Métodos: https://search.r-project.org/CRAN/refmans/MASS/html/rlm.html y https://search.r-project.org/CRAN/refmans/quantreg/html/rq.html
+
+**Nota:** este laboratorio es autosuficiente y usa su propia partición aleatoria con semilla fija. Su procedimiento no pretende ser una evaluación oficial ni atribuye causalidad a las características del texto.

@@ -1,0 +1,15 @@
+"variable","categoria","frecuencia","frecuencia_relativa","porcentaje","frecuencia_acumulada","porcentaje_acumulado"
+"Grupo","VERDURAS Y HORTALIZAS",109,0.2417,24.17,109,24.17
+"Grupo","FRUTAS",73,0.1619,16.19,182,40.35
+"Grupo","TUBERCULOS, RAICES Y PLATANOS",64,0.1419,14.19,246,54.55
+"Grupo","PROCESADOS",58,0.1286,12.86,304,67.41
+"Grupo","GRANOS Y CEREALES",56,0.1242,12.42,360,79.82
+"Grupo","CARNES",44,0.0976,9.76,404,89.58
+"Grupo","LACTEOS Y HUEVOS",37,0.082,8.2,441,97.78
+"Grupo","PESCADOS",10,0.0222,2.22,451,100
+"region","Andina",246,0.5455,54.55,246,54.55
+"region","Pacífica",99,0.2195,21.95,345,76.5
+"region","Caribe",91,0.2018,20.18,436,96.67
+"region","Orinoquía-Amazonía",15,0.0333,3.33,451,100
+"tipo_mercado","Central mayorista urbana",327,0.7251,72.51,327,72.51
+"tipo_mercado","Mercado municipal / acopio",124,0.2749,27.49,451,100

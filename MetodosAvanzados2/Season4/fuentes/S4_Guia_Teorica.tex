@@ -1,0 +1,318 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[spanish,es-noquoting]{babel}
+\usepackage{fontspec}
+\setmainfont{DejaVu Sans}
+\setsansfont{DejaVu Sans}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{geometry,graphicx,xcolor,booktabs,array,enumitem}
+\usepackage{fancyhdr,hyperref,tikz,pgfplots,tcolorbox}
+\pgfplotsset{compat=1.18}
+\geometry{left=24mm,right=24mm,top=27mm,bottom=24mm}
+\definecolor{navy}{HTML}{102844}
+\definecolor{blue}{HTML}{217CE5}
+\definecolor{teal}{HTML}{099F98}
+\definecolor{rose}{HTML}{D94882}
+\definecolor{soft}{HTML}{EFF6FD}
+\definecolor{amber}{HTML}{D78C28}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=teal,pdftitle={Practica 4 - Regresion, redes neuronales y embeddings}}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textcolor{navy}{\small Métodos alternativos de regresión lineal}}
+\rhead{\textcolor{teal}{\small Práctica 4}}
+\cfoot{\textcolor{navy}{\small \thepage}}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\headheight}{14pt}
+\setlength{\parskip}{6pt}
+\setlength{\parindent}{0pt}
+\setlist[itemize]{topsep=4pt,itemsep=3pt}
+\newtcolorbox{idea}{colback=soft,colframe=blue,boxrule=.6pt,
+  arc=3mm,left=4mm,right=4mm,top=2mm,bottom=2mm}
+\newtcolorbox{cuidado}{colback=yellow!8,colframe=amber,boxrule=.6pt,
+  arc=3mm,left=4mm,right=4mm,top=2mm,bottom=2mm}
+\newcommand{\loss}{\mathcal L}
+\newcommand{\R}{\mathbb R}
+\begin{document}
+
+\begin{titlepage}
+\begin{tikzpicture}[remember picture,overlay]
+  \fill[navy] (current page.south west) rectangle (current page.north east);
+  \shade[left color=navy,right color=teal]
+    ([yshift=-105mm]current page.north west)
+    rectangle ([yshift=-175mm]current page.north east);
+  \draw[white,opacity=.18,line width=1.3pt]
+    ([xshift=12mm,yshift=-60mm]current page.north west)
+    circle(42mm);
+  \draw[rose,opacity=.38,line width=10pt]
+    ([xshift=-12mm,yshift=30mm]current page.south east)
+    circle(60mm);
+\end{tikzpicture}
+\vspace*{26mm}
+{\color{white}\large UNIVERSIDAD DE LA SABANA \quad / \quad MATERIAL DE CLASE\par}
+\vspace{14mm}
+{\color{white}\Huge\bfseries Regresión clásica \\
+en el corazón de la IA\par}
+\vspace{8mm}
+{\color{white}\LARGE LS, LAD y Huber en redes neuronales\\
+y procesamiento de lenguaje natural\par}
+\vfill
+{\color{white}\Large Guía conceptual y de interpretación estadística\par}
+\vspace{5mm}
+{\color{white}\normalsize Sesión 4 \quad | \quad R/RStudio \quad | \quad Noviembre de 2026\par}
+\vspace{10mm}
+{\color{white}\normalsize Casos reales: STS Benchmark y CLEAR Corpus\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{La pregunta que articula toda la sesión}
+
+Un algoritmo que procesa lenguaje natural debe convertir frases en variables numéricas y aprender a predecir una salida observada. Los métodos estudiados en sesiones anteriores siguen presentes en este flujo: \textbf{definen la forma en que el algoritmo penaliza sus errores}.
+
+\begin{idea}
+\textbf{Idea central.} Los \emph{embeddings} determinan la representación numérica de un texto. La familia de modelos (recta, plano, red neuronal) determina la flexibilidad de la función predictiva. La función de pérdida LS, LAD o Huber determina cómo se ajustan sus parámetros a los datos.
+\end{idea}
+
+En la práctica principal, cada observación es un par de oraciones:
+\[
+  (s_i^{(1)},s_i^{(2)},y_i),\qquad y_i\in[0,1].
+\]
+La etiqueta \(y_i\) es una puntuación de similitud semántica evaluada por personas. En la versión original del \textbf{STS Benchmark} la escala es de 0 a 5; para este laboratorio se normaliza dividiendo por 5. El código conserva las particiones predefinidas y usa el archivo oficial.
+
+\section{Tres niveles de un mismo problema de aprendizaje}
+
+\subsection{Representación: texto a vector}
+
+Una computadora procesa números. Un \emph{embedding} asocia una palabra o una oración a un vector
+\[
+E(s)\in\R^d.
+\]
+Una representación simple consiste en promediar los embeddings de sus palabras. Es fácil de implementar y visualizar, pero no conserva adecuadamente el orden y puede confundir negaciones. Una representación contextualizada, como Sentence-BERT, modela interacciones entre palabras dentro de la oración.
+
+Para dos oraciones, el coseno es
+\[
+  \mathrm{cos}(u,v)=\frac{\langle u,v\rangle}{\lVert u\rVert\lVert v\rVert},
+\]
+si ambos vectores son no nulos. La similitud coseno es una \textbf{característica del modelo}; \(\mathrm{cos}(u,v)\) \textbf{no es} la etiqueta humana \(y_i\).
+
+\subsection{Modelo predictivo: lineal o neuronal}
+
+La regresión lineal supervisada usa
+\[
+ \widehat y_i=\beta_0+\beta_1\,c_i+\beta_2\,j_i+\beta_3\,d_i,
+\]
+donde \(c_i\) es coseno de embeddings, \(j_i\) es Jaccard léxico y \(d_i\) es una diferencia de longitud. Una red multicapa aprende, por ejemplo,
+\[
+  h_1=\operatorname{ReLU}(W_1x+b_1),\quad
+  h_2=\operatorname{ReLU}(W_2h_1+b_2),\quad
+  \widehat y=\sigma(W_3h_2+b_3).
+\]
+La estructura de red amplía la familia funcional y usa más parámetros; eso no prueba mejor generalización.
+
+\subsection{Pérdida: qué significa «equivocarse»}
+
+Sea \(e_i=y_i-\widehat y_i\) el residuo, con \textbf{esta convención de signo} en toda la guía.
+\[
+\begin{aligned}
+ \loss_{\mathrm{LS}}(\beta)&=\sum_i e_i^2,\\
+ \loss_{\mathrm{LAD}}(\beta)&=\sum_i |e_i|,\\
+ \loss_{\mathrm{Huber}}(\beta)&=\sum_i\rho_\delta(e_i),\qquad
+\rho_\delta(e)=
+\begin{cases}\tfrac12e^2,&|e|\leq\delta,\\
+\delta(|e|-\tfrac12\delta),&|e|>\delta.
+\end{cases}
+\end{aligned}
+\]
+Para LS, si \(X\) tiene rango completo, \(\widehat\beta=(X^\top X)^{-1}X^\top y\). LAD puede formularse como programación lineal, introduciendo variables \(u_i\) con \(u_i\ge e_i\) y \(u_i\ge-e_i\). Huber se ajusta usualmente de manera iterativa.
+
+\section{Por qué los errores extremos cambian el resultado}
+
+\begin{center}
+\begin{tikzpicture}
+ \begin{axis}[width=.95\textwidth,height=7.0cm,
+   xmin=-2.1,xmax=2.1,ymin=0,ymax=3.6,
+   axis lines=left,grid=major,
+   xlabel={$e=y-\widehat y$},ylabel={pérdida},
+   legend style={at={(.5,-.24)},anchor=north,legend columns=3},
+   title={Cómo se penaliza un mismo residuo}]
+  \addplot[blue,very thick,domain=-2:2,samples=120]{x*x/2};
+  \addlegendentry{LS, $e^2/2$}
+  \addplot[rose,very thick,domain=-2:2,samples=120]{abs(x)};
+  \addlegendentry{LAD, $|e|$}
+  \addplot[teal,very thick,domain=-2:2,samples=200]
+      {abs(x)<.7 ? x*x/2 : .7*(abs(x)-.35)};
+  \addlegendentry{Huber, $\delta=.7$}
+ \end{axis}
+\end{tikzpicture}
+\end{center}
+
+La escala relativa en la figura es \emph{didáctica}: se dibuja \(e^2/2\) para compartir su derivada natural con Huber. En LS puede usarse \(e^2\), que tiene los mismos minimizadores. Huber es cuadrática cerca de cero y crece linealmente en magnitud para errores grandes.
+
+Las derivadas respecto del residuo son:
+\[
+ \psi_{\mathrm{LS}}(e)=2e,\qquad
+ \psi_{\mathrm{LAD}}(e)\in\partial|e|,\qquad
+ \psi_{\mathrm{Huber}}(e)=
+ \begin{cases} e,&|e|\le\delta,\\
+ \delta\operatorname{sign}(e),&|e|>\delta.
+ \end{cases}
+\]
+Por la regla de la cadena, al ajustar una red con parámetros \(\theta\), un error grande transmite gradientes de magnitud creciente con LS y gradientes acotados respecto de \(\widehat y\) con Huber.
+
+\begin{cuidado}
+\textbf{Precisión conceptual:} la robustez ante residuos extremos en \(y\) no equivale a protección frente a observaciones con valores extremos de las variables explicativas. Son fenómenos distintos: \emph{outlier vertical} y \emph{alto apalancamiento}.
+\end{cuidado}
+
+\section{Huber como regresión M y como pérdida neuronal}
+
+En regresión M de Huber se minimiza una suma de pérdidas robustas aplicada a residuos \emph{estandarizados por una escala} \(s\). Con \(u_i=e_i/s\), la ecuación de estimación tiene la forma
+\[
+  \sum_i \psi_k(u_i)\,x_i=0,\qquad
+  w_i=\frac{\psi_k(u_i)}{u_i}=
+  \begin{cases}
+   1,&|u_i|\le k,\\ k/|u_i|,&|u_i|>k.
+  \end{cases}
+\]
+\texttt{MASS::rlm(..., psi = psi.huber)} utiliza el umbral \(k\) sobre residuales escalados. Estos pesos no son una probabilidad de que una observación esté mal etiquetada. El valor habitual de \(k=1.345\) corresponde a una calibración clásica bajo normalidad y no se identifica con el umbral \(\delta=0.15\) de una red que predice puntajes de similitud 0--1.
+
+\texttt{keras3::loss\_huber(..., delta=0.15)} especifica en cambio un \(\delta\) medido en la \emph{unidad de la respuesta}. MAE y MSE también se usan como objetivos de redes. La retropropagación aplica la regla de la cadena a estas pérdidas y calcula gradientes respecto de los pesos de cada capa.
+
+\section{Conexión todavía más directa: GloVe y LS}
+
+GloVe construye embeddings de palabras a partir de una matriz \(X=(X_{ij})\) de coocurrencias. Su objetivo histórico es
+\[
+ J=\sum_{i,j} f(X_{ij})
+ \left(w_i^\top \widetilde w_j+b_i+\widetilde b_j-\log X_{ij}\right)^2.
+\]
+El término dentro del cuadrado intenta aproximar el logaritmo de la coocurrencia por un producto interno de vectores, más sesgos. \textbf{Este objetivo contiene mínimos cuadrados ponderados}. Sin embargo, por el término bilineal \(w_i^\top\widetilde w_j\), el problema no es una única regresión lineal OLS convexa en todos los parámetros.
+
+En R, \texttt{text2vec::GlobalVectors} ofrece una implementación formativa. El cuaderno aprende GloVe únicamente con textos de entrenamiento, promedia los vectores de las palabras de cada oración y obtiene una medida de coseno. Este experimento es instructivo, pero no equivale a entrenar modelos de frases de gran escala.
+
+Con una arquitectura tipo Sentence-BERT, otro vínculo aparece en el ajuste \emph{supervisado} de similitud: la función \texttt{CosineSimilarityLoss} de Sentence-Transformers utiliza MSE por defecto entre coseno y etiqueta. La documentación permite sustituir la función de pérdida. El curso no reproduce un entrenamiento integral de BERT porque requiere dependencias y cómputo más elevados.
+
+\section{Lectura detallada de las salidas de R}
+
+\subsection{LS: \texttt{summary(lm(...))}}
+
+\begin{tabular}{>{\raggedright\arraybackslash}p{.30\linewidth}p{.63\linewidth}}
+\toprule
+\textbf{Campo en R} & \textbf{Interpretación correcta}\\\midrule
+\texttt{Call} & Verifica variable respuesta y predictores incluidos.\\
+\texttt{Residuals} & Describe errores de \emph{entrenamiento}; signo negativo implica sobrepredicción si \(e=y-\widehat y\).\\
+\texttt{Estimate} & Efecto lineal asociado a una unidad de predictor; si está estandarizado, equivale a una desviación estándar original.\\
+\texttt{Std. Error} & Precisión inferencial del coeficiente bajo el modelo asumido.\\
+\texttt{t value} & Cociente entre estimación y error estándar.\\
+\texttt{Pr(>|t|)} & Evidencia estadística frente a pendiente cero; no mide importancia educativa ni causalidad.\\
+\texttt{Residual standard error} & Dispersión residual estimada en las unidades de la respuesta.\\
+\texttt{Multiple/Adjusted R-squared} & Ajuste dentro de train; no mide desempeño fuera de muestra.\\
+\texttt{F-statistic} & Contraste conjunto para las pendientes de LS bajo condiciones clásicas.\\
+\bottomrule
+\end{tabular}
+
+\subsection{LAD: \texttt{quantreg::rq(tau=.5)}}
+
+El estimador aproxima la \emph{mediana condicional} cuando la especificación cuantil es adecuada. Sus coeficientes interpretan cómo cambia esa mediana al variar una característica con las restantes constantes. \texttt{summary(...,se="boot")} usa un procedimiento de inferencia bootstrap; la precisión depende del número de remuestreos. Un seudocoeficiente de ajuste cuantil \textbf{no es el mismo} \(R^2\) de OLS.
+
+\subsection{Huber: \texttt{MASS::rlm}}
+
+La tabla de coeficientes presenta estimaciones y errores estándar aproximados. No se debe inventar un valor \(p\) clásico porque \texttt{summary.rlm} no ofrece por defecto el mismo contraste con la misma justificación inferencial de \texttt{lm}. Para mostrar incertidumbre, la práctica calcula percentiles de bootstrap de pares completos y explica qué supuestos quedan pendientes. La escala \texttt{s} y los pesos \texttt{w} son diagnósticos propios de la regresión robusta.
+
+\subsection{Interpretación de un coeficiente estandarizado}
+
+Suponga, a modo \emph{estrictamente hipotético}, que el coeficiente LS del coseno estandarizado es \(0.12\), y la desviación estándar de ese coseno en train es \(0.30\). Un aumento de \(0.10\) unidades del coseno original, con otros predictores constantes, se asociaría con
+\[
+  0.12\frac{0.10}{0.30}=0.04
+\]
+puntos de similitud humana normalizada. En la escala STS de 0 a 5, serían \(0.20\) puntos. Es importante \textbf{no} llamar a esto un «incremento de 4 \%»: 0.04 puntos y 4 puntos porcentuales tienen interpretaciones distintas.
+
+La plantilla del laboratorio \texttt{S4\_Laboratorio\_STS.Rmd} produce esta narración con \textbf{sus propios coeficientes calculados}, sin emplear el ejemplo hipotético como si fuera observado.
+
+\section{Qué significan las métricas}
+
+\[
+ \mathrm{MAE}=\frac1n\sum_i |y_i-\widehat y_i|,
+ \quad
+ \mathrm{RMSE}=\sqrt{\frac1n\sum_i(y_i-\widehat y_i)^2},
+ \quad
+ \rho_s=\operatorname{cor}_{\mathrm{Spearman}}(y,\widehat y).
+\]
+
+\begin{itemize}
+ \item \textbf{MAE:} tamaño habitual de la discrepancia, en puntos de la escala de salida. En STS normalizado, multiplicar por cinco recupera puntos de su escala original.
+ \item \textbf{RMSE:} aumenta relativamente más ante predicciones muy incorrectas y tiene las mismas unidades de la salida.
+ \item \textbf{Spearman:} correlación de rangos. Evalúa la capacidad de ordenar pares por similitud, independientemente de una calibración exacta.
+ \item \textbf{Validación:} sirve para tomar decisiones de arquitectura, parámetros e hiperparámetros.
+ \item \textbf{Prueba:} se utiliza para la estimación final de desempeño, después de fijar el procedimiento.
+\end{itemize}
+
+Un \(\mathrm{MAE}=0.15\) en STS normalizado sería, \emph{a modo de ejemplo}, un promedio de \(0.75\) puntos de discrepancia en la escala original de 0 a 5. Los resultados reales solo aparecen al ejecutar R.
+
+\section{Experimento de robustez y lectura científica}
+
+La práctica compara tres ajustes sobre etiquetas originales y otros tres sobre una copia de entrenamiento donde se invierte artificialmente una fracción de puntuaciones. La partición de validación se deja intacta. Las diferencias de MAE indican qué perdió o ganó cada procedimiento bajo \emph{esa perturbación simulada}; no se atribuyen errores a los anotadores de STS.
+
+Un examen riguroso necesita varias semillas, varios niveles de contaminación y una respuesta explícita sobre qué se desea optimizar. Huber y LAD pueden resistir algunos errores grandes, pero no existe garantía de victoria en cualquier conjunto.
+
+\section{La ampliación educativa: CLEAR Corpus}
+
+La práctica 4B utiliza el conjunto real \textbf{CLEAR Corpus}, con fragmentos de lectura y una puntuación de \emph{facilidad} estimada a partir de juicios humanos. Una puntuación \texttt{BT\_easiness} mayor indica facilidad relativa. \textbf{No es porcentaje, probabilidad ni escala 0--1}.
+
+Las variables explicativas del segundo caso son:
+\begin{enumerate}
+ \item \(\log(1+\text{palabras})\), volumen textual transformado.
+ \item \(\text{palabras}/\text{oraciones}\), longitud media de las oraciones.
+ \item Longitud media de palabra, característica léxica calculada en R.
+\end{enumerate}
+
+Los modelos LS, LAD y Huber comparten estos predictores y el mismo conjunto de evaluación. Una pendiente negativa para palabras por oración, si aparece en datos reales, se leería como menor facilidad estimada al aumentar la longitud de oración, controlando las demás variables. Esto es una asociación, no evidencia de que editar esa variable por sí sola cause una mejora medible.
+
+El caso conecta estadística robusta con una aplicación auténtica de \textbf{IA educativa}: ordenar textos para ofrecer materiales adecuados. Su disponibilidad, licencia y trazabilidad se documentan en el repositorio de sus autores.
+
+\section{Secuencia didáctica sugerida: 110 minutos}
+
+\begin{center}
+\begin{tabular}{p{.17\linewidth}p{.36\linewidth}p{.39\linewidth}}
+\toprule
+\textbf{Tiempo} & \textbf{Actividad} & \textbf{Evidencia esperada}\\\midrule
+0--12 min & Frases semejantes, problema real y splits & Formulación de respuesta y métrica\\
+12--27 min & Curvas LS, LAD, Huber y gradientes & Explicación de sensibilidad a errores\\
+27--47 min & GloVe en R y similitud coseno & Interpretación de matriz y vector\\
+47--68 min & Ajustes LS/LAD/Huber & Interpretación de coeficientes e intervalos\\
+68--85 min & Validación y contaminación artificial & Decisión justificada con MAE/RMSE\\
+85--100 min & Red neuronal y pérdidas & Relación con backprop, límites\\
+100--110 min & Debate de aplicación CLEAR & Propuesta argumentada de modelo\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{cuidado}
+\textbf{Logística.} El entrenamiento GloVe y la descarga de dependencias se deben preparar antes de la clase cuando se trabaja sin conexión confiable. La red neuronal con TensorFlow y Sentence-BERT son módulos opcionales de profundización. Los cuadernos principales pueden ejecutarse con R y paquetes CRAN sin GPU.
+\end{cuidado}
+
+\section{Preguntas para evaluación formativa}
+
+\begin{enumerate}
+ \item Compare matemáticamente la sensibilidad de los tres gradientes ante \(e=3\).
+ \item Explique por qué la regresión LAD estima una mediana condicional y cómo cambia la lectura de una pendiente frente a LS.
+ \item Diferencie un \emph{embedding} de una salida supervisada; ¿qué información de las etiquetas humanas conoce GloVe?
+ \item Si una red tiene menor pérdida de entrenamiento y peor MAE de test, ¿qué conclusión corresponde?
+ \item Explique por qué \texttt{lmrob} por defecto (estimación MM) no debe rotularse sin más como exactamente la misma regresión M de Huber de \texttt{MASS::rlm}.
+ \item Defienda una elección de pérdida para una biblioteca de IA educativa donde algunos errores de dificultad pueden ser especialmente costosos.
+\end{enumerate}
+
+\section{Fuentes primarias}
+
+\begin{enumerate}
+\item Pennington, J., Socher, R. y Manning, C. (2014). \emph{GloVe: Global Vectors for Word Representation}. ACL. \url{https://aclanthology.org/D14-1162/}.
+\item Reimers, N. y Gurevych, I. (2019). \emph{Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks}. EMNLP. \url{https://aclanthology.org/D19-1410/}.
+\item Cer, D. et al. (2017). \emph{SemEval-2017 Task 1: Semantic Textual Similarity Multilingual and Crosslingual Focused Evaluation}. \url{https://aclanthology.org/S17-2001/}.
+\item STS Benchmark, distribución oficial de Sentence-Transformers. \url{https://sbert.net/datasets/stsbenchmark.tsv.gz}.
+\item Crossley, S. et al. (2022). \emph{A large-scaled corpus for assessing text readability}. \url{https://pmc.ncbi.nlm.nih.gov/articles/PMC10027808/}.
+\item Repositorio original de CLEAR Corpus. \url{https://github.com/scrosseye/CLEAR-Corpus}.
+\item Documentación R de \texttt{MASS::rlm}. \url{https://search.r-project.org/CRAN/refmans/MASS/html/rlm.html}.
+\item Documentación de \texttt{quantreg}. \url{https://search.r-project.org/CRAN/refmans/quantreg/html/rq.html}.
+\item Documentación de \texttt{keras3}. \url{https://keras3.posit.co/}.
+\item Documentación de pérdidas de Sentence-Transformers. \url{https://sbert.net/docs/package_reference/sentence_transformer/losses.html}.
+\end{enumerate}
+
+\end{document}

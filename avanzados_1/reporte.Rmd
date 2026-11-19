@@ -1,0 +1,26 @@
+---
+title: "Mi Proyecto Local"
+output: html_document
+---
+
+```{r}
+```{r}
+# Esto es un comentario de R (lleva un hashtag al inicio)
+summary(cars)
+```
+```
+
+```{r}
+# Cargar y explorar datos
+data(iris)
+head(iris)
+
+# Estadísticas descriptivas
+summary(iris)
+
+# Gráfico básico
+plot(iris$Sepal.Length, iris$Sepal.Width, 
+    main = "Sepal Length vs Width",
+    xlab = "Sepal Length",
+    ylab = "Sepal Width")
+```

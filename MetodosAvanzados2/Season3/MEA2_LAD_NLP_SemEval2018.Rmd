@@ -1,0 +1,1164 @@
+---
+title: "MEA2 | Regresión LS y LAD aplicada al lenguaje natural"
+subtitle: "Laboratorio reproducible de aprendizaje supervisado · SemEval-2018 · RStudio"
+author: "Métodos Estadísticos Alternativos de Regresión · Material docente"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+lang: es
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    number_sections: true
+    code_folding: show
+    highlight: tango
+    mathjax: default
+    self_contained: true
+---
+
+```{r configuracion, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, warning = FALSE, message = FALSE,
+  fig.width = 10, fig.height = 5.7,
+  fig.align = "center", dpi = 140, dev = "svg"
+)
+options(scipen = 5, digits = 5, width = 105)
+set.seed(2026)
+```
+
+<style>
+body {font-family: 'Segoe UI', 'Aptos', Arial, sans-serif; line-height:1.65; color:#23304c;}
+h1,h2 {color:#273b87; font-weight:750;}
+h3 {color:#087f84;}
+.hero {background:linear-gradient(115deg,#152e74,#127a98 58%,#0fa58f); color:white;
+       padding:34px 32px; border-radius:19px; margin:8px 0 25px; box-shadow:0 14px 24px #1f4a6722;}
+.hero h2 {font-size:32px; margin:0 0 9px; color:#ffffff; font-weight:800;}
+.hero p {font-size:18px; margin:0; color:#e7fbff;}
+.chip {display:inline-block; color:#0f5d70; background:#e5f9f5; border:1px solid #b7e8db;
+       border-radius:50px; font-size:13px; font-weight:700; padding:6px 13px; margin:3px 3px 9px 0;}
+.promptbox {background:#fff5e7; padding:16px 19px; border-left:6px solid #f4a344;
+            border-radius:9px; margin:19px 0;}
+.keybox {background:#eaf8f8; padding:16px 19px; border-left:6px solid #0e9c9e;
+         border-radius:9px; margin:20px 0;}
+.warningbox {background:#fff0f0; padding:16px 19px; border-left:6px solid #d95a60;
+             border-radius:9px; margin:20px 0;}
+.pipe {display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin:18px 0;}
+.pipe span {padding:16px 8px; text-align:center; font-weight:700; border-radius:14px;
+            background:#f1f6ff; border:2px solid #d3dfff; font-size:13px; color:#24417d;}
+.pipe span:nth-child(2), .pipe span:nth-child(4) {background:#e9f8f2; border-color:#bfe5d4; color:#14715c;}
+.pipe span:nth-child(5) {background:#fff0de; border-color:#f8d8a9; color:#96571b;}
+details {background:#f5f8ff; border:1px solid #dbe5fb; border-radius:11px;
+         padding:10px 15px; margin:11px 0 21px;}
+summary {font-weight:700; cursor:pointer; color:#234585;}
+blockquote {background:#f7faff; border-left:4px solid #6a83df; padding:11px 18px;}
+table {font-size:0.94em;}
+@media(max-width:800px){.pipe{grid-template-columns:1fr;}.hero h2{font-size:25px;}}
+</style>
+
+<div class="hero">
+  <div style="font-size:14px;letter-spacing:2px;font-weight:750;color:#b3f1ef">PLN · INTELIGENCIA ARTIFICIAL · APRENDIZAJE SUPERVISADO</div>
+  <h2>¿Puede una recta interpretar las emociones de un tuit?</h2>
+  <p>Las palabras se convierten en variables explicativas; una calificación humana, en respuesta. Comparamos LS y LAD en datos oficiales en español.</p>
+</div>
+
+<span class="chip">Regresión simple y múltiple</span>
+<span class="chip">LS frente a LAD</span>
+<span class="chip">Inferencia bootstrap</span>
+<span class="chip">Datos oficiales</span>
+<span class="chip">Gráficas SVG</span>
+
+**Pregunta de investigación.** Dado el texto de un tuit en español, ¿qué relación existe entre sus características lingüísticas y su **valencia emocional**, es decir, qué tan negativa o positiva resulta una anotación humana?
+
+**Enfoque explicativo.** Nos interesa identificar y comprender asociaciones entre la variable de respuesta y las explicativas. La predicción en textos no vistos servirá para verificar si esas relaciones generalizan; **no presentaremos las pendientes como efectos causales**.
+
+**Duración sugerida:** 100–120 minutos. Este documento contiene código ejecutable, interpretaciones y respuestas a todas las actividades. Las cifras se calculan al pulsar **Knit** en RStudio.
+
+# 1. El caso real y su conexión con la IA
+
+La tarea *SemEval-2018 Task 1: Affect in Tweets* proporciona mensajes publicados en redes sociales y puntuaciones de valencia asignadas mediante un procedimiento de anotación. Usaremos la subtarea **V-reg (Valence Regression)** en **español**. La respuesta es una puntuación continua de 0 (valencia muy negativa) a 1 (muy positiva); valores cercanos a 0.5 sugieren una posición intermedia en esta escala.
+
+Una fila corresponde a un tuit. A partir del texto construiremos características observables, como la presencia de palabras positivas y negativas, negaciones y signos de exclamación.
+
+<div class="pipe">
+  <span>① Texto en español</span>
+  <span>② Variables lingüísticas</span>
+  <span>③ Modelos LS / LAD</span>
+  <span>④ Validación y prueba</span>
+  <span>⑤ Interpretación</span>
+</div>
+
+<div class="keybox"><strong>Aprendizaje supervisado.</strong> El algoritmo recibe ejemplos de entrada <em>X</em> (características de mensajes) emparejados con una respuesta <em>Y</em> (valencia humana). Aprende coeficientes en los datos de entrenamiento y se evalúa con mensajes que no utilizó para estimarlos. Eso hace que una regresión lineal también sea un modelo de aprendizaje automático.</div>
+
+## 1.1. ¿Qué significan LS y LAD en este problema?
+
+Para cada tuit \(i\), sean \(Y_i\) la valencia anotada y \(\boldsymbol{x}_i\) sus características lingüísticas. Escribimos una función lineal explicativa:
+
+\[
+m(\boldsymbol{x}_i)=\beta_0+\beta_1x_{i1}+\cdots+\beta_px_{ip}.
+\]
+
+**Mínimos cuadrados ordinarios (LS)** elige los coeficientes que minimizan
+
+\[
+\widehat{\boldsymbol\beta}_{\mathrm{LS}}
+=\underset{\boldsymbol\beta}{\operatorname{arg\,min}}
+\sum_{i=1}^{n}\left(Y_i-m(\boldsymbol{x}_i)\right)^2.
+\]
+
+Su lectura explicativa habitual es **la media condicional de la valencia**:
+
+\[E(Y\mid \boldsymbol X=\boldsymbol x)\approx m(\boldsymbol x).\]
+
+**Mínimas desviaciones absolutas (LAD)** minimiza, en cambio,
+
+\[
+\widehat{\boldsymbol\beta}_{\mathrm{LAD}}
+=\underset{\boldsymbol\beta}{\operatorname{arg\,min}}
+\sum_{i=1}^{n}\left|Y_i-m(\boldsymbol{x}_i)\right|.
+\]
+
+En la formulación de regresión cuantílica, LAD corresponde a \(\tau=0.5\). La lectura explicativa es **la mediana condicional de la valencia**:
+
+\[Q_{0.5}(Y\mid\boldsymbol X=\boldsymbol x)\approx m(\boldsymbol x).\]
+
+<div class="promptbox"><strong>Pregunta inicial.</strong> Si varios tuits contienen expresiones excepcionalmente negativas, ¿qué modelo penaliza más fuertemente los errores grandes: LS o LAD? ¿Por qué esto podría cambiar la interpretación de una pendiente?</div>
+
+# 2. Preparación de RStudio
+
+En la **consola de R** (solo la primera vez), ejecutar:
+
+```r
+install.packages(c("rmarkdown", "knitr", "ggplot2", "quantreg", "stringi"))
+```
+
+Después, abrir este archivo `.Rmd` en RStudio y seleccionar **Knit**. Se necesita conexión a internet la primera vez para descargar el corpus y para instalar paquetes. El ZIP se guarda únicamente en el equipo del estudiante y se reutiliza en posteriores compilaciones.
+
+```{r paquetes-y-utilidades}
+necesarios <- c("ggplot2", "quantreg", "stringi", "knitr")
+faltantes <- necesarios[!vapply(necesarios, requireNamespace,
+                               quietly = TRUE, FUN.VALUE = logical(1))]
+if (length(faltantes)) {
+  stop("Instale estos paquetes antes de compilar: ",
+       paste(faltantes, collapse = ", "))
+}
+library(ggplot2)
+library(quantreg)
+
+tema_nlp <- theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", color = "#243a82"),
+        plot.subtitle = element_text(color = "#506484"),
+        axis.title = element_text(color = "#243a82"),
+        panel.grid.minor = element_blank(),
+        legend.position = "bottom")
+
+num <- function(x, digitos = 3) {
+  format(round(as.numeric(x), digitos), nsmall = digitos, trim = TRUE)
+}
+interpretacion_signo <- function(x) {
+  if (x > 0) "aumento" else if (x < 0) "disminución" else "ausencia de cambio"
+}
+pvalor <- function(x) {
+  if (!length(x) || is.na(x)) return("no disponible")
+  if (x < 0.001) "< 0.001" else num(x, 3)
+}
+lectura_p <- function(x, alfa = .05) {
+  if (!length(x) || is.na(x)) return("no es posible evaluarla con este resultado")
+  if (x < alfa) {
+    "hay evidencia estadística de una asociación distinta de cero bajo los supuestos del modelo"
+  } else {
+    "no hay evidencia suficiente para excluir una asociación nula; esto no demuestra que el efecto sea cero"
+  }
+}
+lectura_ic <- function(inferior, superior) {
+  if (inferior > 0) "completamente positivo"
+  else if (superior < 0) "completamente negativo"
+  else "compatible tanto con cero como con alguno de los signos"
+}
+```
+
+# 3. Descargar las observaciones del sitio oficial
+
+**Procedencia:** repositorio del investigador Saif M. Mohammad, autor del recurso y de la publicación de SemEval-2018. El paquete es el archivo **`SemEval2018-Task1-all-data.zip`** servido directamente desde el dominio del autor:
+
+- Página oficial de los conjuntos de datos: <https://saifmohammad.com/WebPages/SentimentEmotionLabeledData.html>.
+- Archivo ZIP oficial: <https://saifmohammad.com/WebDocs/AIT-2018/AIT2018-DATA/SemEval2018-Task1-all-data.zip>.
+- Descripción científica: Mohammad et al. (2018), <https://aclanthology.org/S18-1001/>.
+
+<div class="warningbox"><strong>Uso responsable del corpus.</strong> Los responsables permiten su uso gratuito con fines de investigación y solicitan <strong>no redistribuir los datos</strong>. Por ello, este material entrega únicamente el código para descargarlos del sitio del autor; no empaqueta ni comparte los tuits. Si se genera un reporte HTML, se recomienda no publicar sus tablas de texto sin revisar las condiciones aplicables.</div>
+
+```{r descarga-oficial}
+url_oficial <- paste0(
+  "https://saifmohammad.com/WebDocs/AIT-2018/AIT2018-DATA/",
+  "SemEval2018-Task1-all-data.zip"
+)
+ruta_zip <- file.path("datos_semeval_oficial", "SemEval2018-Task1-all-data.zip")
+dir.create(dirname(ruta_zip), recursive = TRUE, showWarnings = FALSE)
+
+if (!file.exists(ruta_zip)) {
+  message("Descargando el ZIP desde el dominio oficial del autor...")
+  descargado <- tryCatch(
+    utils::download.file(url_oficial, destfile = ruta_zip,
+                         method = "libcurl", mode = "wb", quiet = TRUE),
+    error = function(e) {
+      message("No se pudo descargar automáticamente: ", conditionMessage(e))
+      1L
+    }
+  )
+  if (!identical(as.integer(descargado), 0L)) {
+    stop("Descargue manualmente el ZIP desde la URL oficial indicada arriba ",
+         "y colóquelo en: ", normalizePath(dirname(ruta_zip)),
+         ". Después vuelva a pulsar Knit.")
+  }
+}
+
+if (is.na(file.size(ruta_zip)) || file.size(ruta_zip) < 1000000L) {
+  stop("El archivo local no parece ser el ZIP completo. Compruebe la descarga oficial.")
+}
+
+# Las tres rutas fueron comprobadas contra el ZIP oficial (incluida la versión gold de prueba).
+archivos <- c(
+  entrenamiento = "SemEval2018-Task1-all-data/Spanish/V-reg/2018-Valence-reg-Es-train.txt",
+  validacion    = "SemEval2018-Task1-all-data/Spanish/V-reg/2018-Valence-reg-Es-dev.txt",
+  prueba        = "SemEval2018-Task1-all-data/Spanish/V-reg/2018-Valence-reg-Es-test-gold.txt"
+)
+contenido_zip <- utils::unzip(ruta_zip, list = TRUE)$Name
+if (!all(archivos %in% contenido_zip)) {
+  stop("El ZIP no contiene exactamente la estructura V-reg de español esperada. ",
+       "Verifique que sea SemEval2018-Task1-all-data.zip del sitio oficial.")
+}
+
+leer_particion <- function(nombre_archivo, etiqueta) {
+  tabla <- utils::read.delim(
+    unz(ruta_zip, nombre_archivo), header = TRUE, sep = "\t",
+    quote = "", comment.char = "", check.names = FALSE,
+    fileEncoding = "UTF-8", stringsAsFactors = FALSE
+  )
+  requeridas <- c("ID", "Tweet", "Affect Dimension", "Intensity Score")
+  if (!all(requeridas %in% names(tabla))) {
+    stop("Cabeceras inesperadas en la partición: ", etiqueta)
+  }
+  out <- data.frame(
+    id = as.character(tabla[["ID"]]),
+    texto = as.character(tabla[["Tweet"]]),
+    valencia = suppressWarnings(as.numeric(tabla[["Intensity Score"]])),
+    particion = etiqueta,
+    stringsAsFactors = FALSE
+  )
+  if (anyNA(out$valencia) || any(out$valencia < 0 | out$valencia > 1)) {
+    stop("La variable respuesta contiene valores inválidos en ", etiqueta)
+  }
+  if (anyDuplicated(out$id)) stop("Hay identificadores repetidos en ", etiqueta)
+  out
+}
+
+entrenamiento <- leer_particion(archivos[["entrenamiento"]], "Entrenamiento")
+validacion <- leer_particion(archivos[["validacion"]], "Validación")
+prueba <- leer_particion(archivos[["prueba"]], "Prueba")
+
+if (length(intersect(entrenamiento$id, validacion$id)) ||
+    length(intersect(entrenamiento$id, prueba$id)) ||
+    length(intersect(validacion$id, prueba$id))) {
+  stop("Las particiones tienen identificadores compartidos: revise el corpus.")
+}
+
+resumen_particiones <- data.frame(
+  particion = c("Entrenamiento", "Validación", "Prueba"),
+  n_tuits = c(nrow(entrenamiento), nrow(validacion), nrow(prueba)),
+  valencia_media = c(mean(entrenamiento$valencia), mean(validacion$valencia), NA_real_),
+  valencia_mediana = c(median(entrenamiento$valencia), median(validacion$valencia), NA_real_)
+)
+knitr::kable(resumen_particiones, digits = 3,
+             caption = "Particiones oficiales de V-reg en español")
+
+proporcion_encima_medio <- mean(entrenamiento$valencia > .5)
+q_valencia <- quantile(entrenamiento$valencia, c(.25, .5, .75))
+
+esperados <- c(1566L, 229L, 648L)
+if (!identical(as.integer(resumen_particiones$n_tuits), esperados)) {
+  warning("Los tamaños difieren de los de la versión verificada del corpus oficial.")
+}
+```
+
+La separación ya viene definida por los organizadores: **`r nrow(entrenamiento)`** tuits de entrenamiento, **`r nrow(validacion)`** de validación y **`r nrow(prueba)`** de prueba. No mezclaremos los mensajes de la partición de prueba en el ajuste ni en la selección del modelo.
+
+### Cómo interpretar la primera tabla de R
+
+- **`n_tuits`** informa el número de ejemplos disponibles para cada función del flujo supervisado. Solo las **`r nrow(entrenamiento)`** respuestas de entrenamiento participan en la estimación de las pendientes.
+- **`valencia_media`** es el promedio aritmético de las anotaciones de cada partición. En entrenamiento vale **`r num(mean(entrenamiento$valencia), 4)`**. Es sensible a valores extremos.
+- **`valencia_mediana`** es el centro que deja, aproximadamente, la mitad de las puntuaciones a cada lado. En entrenamiento vale **`r num(median(entrenamiento$valencia), 4)`**. Es precisamente el tipo de centro que motiva LAD.
+- Los valores `NA` de media y mediana en la fila **Prueba** son **deliberados**: no describimos sus etiquetas antes de seleccionar el modelo. El archivo oficial contiene esas anotaciones, pero las reservamos para la evaluación final, evitando el uso indirecto de la prueba durante el diseño.
+- Los percentiles 25 y 75 de entrenamiento son **`r num(q_valencia[1], 3)`** y **`r num(q_valencia[3], 3)`**. Por tanto, el 50 % central de las valoraciones se concentra aproximadamente entre esas dos puntuaciones.
+- En entrenamiento, **`r num(100 * proporcion_encima_medio, 1)` %** de las puntuaciones están por encima de 0.5. Esto describe las **anotaciones**, no demuestra qué sienten personalmente sus autores.
+
+**Lectura de la gráfica siguiente.** La altura de cada barra es una frecuencia de tuits, no una probabilidad ni un coeficiente de regresión. Las dos figuras tienen escalas verticales diferentes porque los tamaños de muestra también difieren; para comparar distribuciones deben observarse la ubicación y la forma de las barras, no únicamente su altura. **La distribución de prueba se mantiene sin examinar** en esta etapa.
+
+```{r distribucion-valencia, fig.cap="Distribución de la valencia observada en cada partición oficial. Gráfico vectorial SVG."}
+datos_brutos <- rbind(entrenamiento, validacion)
+ggplot(datos_brutos, aes(x = valencia, fill = particion)) +
+  geom_histogram(bins = 26, color = "white", linewidth = 0.3, alpha = 0.88) +
+  facet_wrap(~particion, nrow = 1, scales = "free_y") +
+  scale_fill_manual(values = c("Entrenamiento" = "#3178c6",
+                               "Validación" = "#17a398")) +
+  labs(title = "¿Cómo distribuyen las personas la valencia de los mensajes?",
+       subtitle = "La evaluación requiere separar ejemplos conocidos y no vistos",
+       x = "Valencia humana anotada (0 = negativa; 1 = positiva)",
+       y = "Número de tuits") + tema_nlp + guides(fill = "none")
+```
+
+# 4. PLN: del tuit a las variables explicativas
+
+La regresión necesita variables numéricas y, si corresponde, categóricas. Una manera **didáctica e interpretable** de convertir un texto en números es construir características manualmente. No estamos entrenando una red neuronal ni usando representaciones ocultas; podremos explicar cada coeficiente.
+
+Definiremos las siguientes variables, sin utilizar la valencia anotada para crearlas:
+
+| Explicativa | Tipo | Interpretación en un tuit |
+|:--|:--|:--|
+| `polaridad_lexica` | Numérica | (Palabras positivas − negativas) / total de palabras. |
+| `densidad_positiva` | Numérica | Proporción de palabras reconocidas como positivas. |
+| `densidad_negativa` | Numérica | Proporción de palabras reconocidas como negativas. |
+| `negacion` | Categórica | Presencia de `no`, `nunca`, `jamás`, `sin`, etc. |
+| `log_palabras` | Numérica | \(\log(1+\text{número de palabras})\), para controlar extensión. |
+| `exclamaciones` | Numérica | Número de signos `!` y `¡`. |
+| `fraccion_mayusculas` | Numérica | Proporción de letras en mayúscula. |
+
+<div class="keybox"><strong>Decisión pedagógica.</strong> El pequeño vocabulario positivo/negativo es un <em>diccionario ilustrativo fijo</em>, escrito antes de estimar los modelos. No representa un lexicón oficial exhaustivo ni debe confundirse con un modelo moderno de análisis de sentimientos. Su ventaja es que la asociación entre los predictores y la respuesta resulta visible y discutible.</div>
+
+```{r ingenieria-de-variables}
+vocab_positivo <- c(
+  "feliz", "felices", "felicidad", "alegria", "alegre", "amor", "amo", "amar",
+  "bien", "bueno", "buena", "buenos", "buenas", "genial", "excelente",
+  "estupendo", "estupenda", "gracias", "encanta", "encantan", "mejor",
+  "perfecto", "perfecta", "increible", "maravilloso", "fantastico", "gusto"
+)
+vocab_negativo <- c(
+  "mal", "malo", "mala", "malos", "malas", "triste", "tristes", "odio",
+  "odiar", "horrible", "terrible", "fatal", "peor", "peores", "asco",
+  "miedo", "dolor", "pesimo", "pesima", "fracaso", "rabia", "enojado",
+  "enojada", "decepcion", "decepcionado", "decepcionada", "sufrir"
+)
+vocab_negacion <- c("no", "nunca", "jamas", "sin", "tampoco", "ni")
+
+extraer_variables <- function(tabla) {
+  t_original <- ifelse(is.na(tabla$texto), "", tabla$texto)
+  t_limpio <- stringi::stri_trans_general(tolower(t_original), "Latin-ASCII")
+  tokens <- stringi::stri_extract_all_regex(t_limpio, "\\p{L}+",
+                                            omit_no_match = TRUE)
+  tokens <- lapply(tokens, function(x) x[!is.na(x)])
+  palabras <- lengths(tokens)
+  cuenta_vocab <- function(diccionario) {
+    vapply(tokens, function(x) sum(x %in% diccionario), numeric(1))
+  }
+  p <- cuenta_vocab(vocab_positivo)
+  n <- cuenta_vocab(vocab_negativo)
+  tiene_negacion <- vapply(tokens,
+                          function(x) any(x %in% vocab_negacion), logical(1))
+
+  tabla$palabras <- palabras
+  tabla$densidad_positiva <- p / pmax(palabras, 1)
+  tabla$densidad_negativa <- n / pmax(palabras, 1)
+  tabla$polaridad_lexica <- (p - n) / pmax(palabras, 1)
+  tabla$negacion <- factor(ifelse(tiene_negacion, "con", "sin"),
+                          levels = c("sin", "con"))
+  tabla$log_palabras <- log1p(palabras)
+  tabla$exclamaciones <- stringi::stri_count_regex(t_original, "[!¡]")
+  tabla$fraccion_mayusculas <-
+    stringi::stri_count_regex(t_original, "\\p{Lu}") /
+    pmax(stringi::stri_count_regex(t_original, "\\p{L}"), 1)
+  tabla
+}
+
+entrenamiento <- extraer_variables(entrenamiento)
+validacion <- extraer_variables(validacion)
+prueba <- extraer_variables(prueba)
+
+stopifnot(all(vapply(entrenamiento[c(
+  "polaridad_lexica", "densidad_positiva", "densidad_negativa",
+  "log_palabras", "exclamaciones", "fraccion_mayusculas")],
+  function(z) all(is.finite(z)), logical(1))))
+
+# Mostramos únicamente las características, sin reproducir el corpus de tuits.
+knitr::kable(head(entrenamiento[c(
+  "valencia", "polaridad_lexica", "densidad_positiva",
+  "densidad_negativa", "negacion", "log_palabras", "exclamaciones")], 8),
+  digits = 3, caption = "Características lingüísticas calculadas en R")
+
+porcentaje_sin_palabras_lexico <- 100 * mean(entrenamiento$polaridad_lexica == 0)
+porcentaje_con_negacion <- 100 * mean(entrenamiento$negacion == "con")
+correlacion_simple <- cor(entrenamiento$valencia,
+                          entrenamiento$polaridad_lexica)
+```
+
+### Interpretación de la tabla de variables transformadas
+
+- Cada fila es un **ejemplo etiquetado**, no una palabra. La columna `valencia` sigue siendo la **respuesta humana**. Todas las demás son características de entrada derivadas automáticamente del texto.
+- `densidad_positiva = 0.10` significa que, según nuestro diccionario, aproximadamente el 10 % de las palabras de ese mensaje está incluido en la lista positiva; **no** equivale a una probabilidad del 10 % de que el tuit sea positivo.
+- `densidad_negativa = 0.05` tiene la misma lectura, pero para el vocabulario negativo. La `polaridad_lexica` es la diferencia entre ambas densidades. Si vale cero, puede ser porque no hubo coincidencias **o** porque hubo igual proporción de palabras de ambos grupos.
+- `negacion = con` no es una cantidad: es una categoría que indica al menos una coincidencia con nuestra lista de negaciones. En el entrenamiento aparece en **`r num(porcentaje_con_negacion, 1)` %** de los mensajes.
+- **`r num(porcentaje_sin_palabras_lexico, 1)` %** de los tuits de entrenamiento presenta `polaridad_lexica = 0`. Por eso esperamos una acumulación vertical de puntos alrededor de cero en la gráfica siguiente: el vocabulario pequeño pierde información en muchos mensajes.
+- La correlación de Pearson entre polaridad y valencia en entrenamiento es **`r num(correlacion_simple, 3)`**. Se trata de una asociación lineal *bivariada* observada, anterior al ajuste múltiple. No anticipa necesariamente el signo o la magnitud de cada coeficiente parcial.
+
+**Interpretación de la nube de puntos.** El eje horizontal muestra la característica lingüística calculada, mientras que el eje vertical muestra la anotación humana. Una recta inclinada señala una tendencia promedio, pero la dispersión vertical indica que mensajes con una polaridad calculada similar pueden recibir valoraciones muy distintas.
+
+## 4.1. ¿Por qué puede fallar este procesamiento?
+
+Una palabra puede tener varios significados; las expresiones irónicas, los modismos y los emojis no quedan bien capturados por un vocabulario tan breve. Por ejemplo, `no es bueno` activa una palabra positiva **y** una negación, pero nuestro método no calcula automáticamente su alcance sintáctico. Esta limitación es una oportunidad para discutir ingeniería de características.
+
+```{r ejemplo-lexico, fig.cap="Relación observada entre valencia humana y polaridad léxica en el conjunto de entrenamiento."}
+ggplot(entrenamiento, aes(x = polaridad_lexica, y = valencia)) +
+  geom_jitter(width = 0.004, height = 0, alpha = 0.19,
+              color = "#316baf", size = 1.8) +
+  geom_smooth(method = "lm", se = FALSE, color = "#ed8650", linewidth = 1.25) +
+  labs(title = "¿Tuits con más palabras positivas tienen mayor valencia?",
+       subtitle = "Puntos: mensajes reales · Línea naranja: ajuste LS exploratorio",
+       x = "Polaridad léxica creada a partir del texto",
+       y = "Valencia anotada por humanos") + tema_nlp
+```
+
+# 5. Regresión simple: LS frente a LAD
+
+Nuestra primera explicativa es la polaridad léxica \(P\). Ajustamos los dos modelos **solo con datos de entrenamiento**:
+
+\[
+\begin{aligned}
+E(Y\mid P=p)&\approx\beta_0^{\mathrm{LS}}+\beta_1^{\mathrm{LS}}p,\\
+Q_{0.5}(Y\mid P=p)&\approx\beta_0^{\mathrm{LAD}}+\beta_1^{\mathrm{LAD}}p.
+\end{aligned}
+\]
+
+En `R`, `lm()` ajusta LS y `quantreg::rq(..., tau = 0.5)` ajusta LAD.
+
+```{r modelos-simples}
+ls_simple <- lm(valencia ~ polaridad_lexica, data = entrenamiento)
+lad_simple <- quantreg::rq(valencia ~ polaridad_lexica,
+                           data = entrenamiento, tau = 0.5, method = "br")
+
+cat("Salida del modelo LS simple:\n")
+print(summary(ls_simple))
+cat("\nCoeficientes del modelo LAD simple:\n")
+print(coef(lad_simple))
+
+resumen_ls_simple <- summary(ls_simple)
+ic_ls_simple <- confint(ls_simple)["polaridad_lexica", ]
+set.seed(2026)
+resumen_lad_simple <- summary(lad_simple, se = "boot", R = 399,
+                              bsmethod = "xy", covariance = TRUE)
+ee_lad_simple <- as.numeric(resumen_lad_simple$coefficients["polaridad_lexica", 2])
+ic_lad_simple <- coef(lad_simple)["polaridad_lexica"] +
+  c(-1, 1) * qnorm(.975) * ee_lad_simple
+
+tabla_pendientes_simple <- data.frame(
+  modelo = c("LS · media", "LAD · mediana"),
+  pendiente = c(coef(ls_simple)["polaridad_lexica"],
+                 coef(lad_simple)["polaridad_lexica"]),
+  error_estandar = c(resumen_ls_simple$coefficients["polaridad_lexica", 2],
+                     ee_lad_simple),
+  ic95_inferior = c(ic_ls_simple[1], ic_lad_simple[1]),
+  ic95_superior = c(ic_ls_simple[2], ic_lad_simple[2])
+)
+knitr::kable(tabla_pendientes_simple, digits = 4,
+             caption = "Inferencia de la pendiente: LS clásica y LAD bootstrap")
+
+coef_simple <- data.frame(
+  metodo = c("LS: media condicional", "LAD: mediana condicional"),
+  intercepto = c(unname(coef(ls_simple)[1]), unname(coef(lad_simple)[1])),
+  pendiente_polaridad = c(unname(coef(ls_simple)[2]), unname(coef(lad_simple)[2]))
+)
+knitr::kable(coef_simple, digits = 4,
+             caption = "Dos rectas explicativas sobre los mismos mensajes")
+
+tabla_objetivos_simple <- data.frame(
+  modelo = c("LS simple", "LAD simple"),
+  suma_cuadrados = c(sum(residuals(ls_simple)^2),
+                    sum(residuals(lad_simple)^2)),
+  suma_absolutos = c(sum(abs(residuals(ls_simple))),
+                    sum(abs(residuals(lad_simple))))
+)
+knitr::kable(tabla_objetivos_simple, digits = 4,
+             caption = "Valor de ambas funciones de pérdida sobre el entrenamiento")
+```
+
+### Interpretación guiada de las salidas de R
+
+- **LS.** Intercepto estimado: **`r num(coef(ls_simple)[1])`**. Es la **valencia media estimada** para un tuit con polaridad léxica igual a cero. La pendiente **`r num(coef(ls_simple)[2])`** representa el cambio estimado en esa media por una unidad adicional de polaridad, dentro del alcance del modelo.
+- **LAD.** Intercepto estimado: **`r num(coef(lad_simple)[1])`**. Es la **valencia mediana estimada** cuando la polaridad es cero. La pendiente **`r num(coef(lad_simple)[2])`** representa el cambio en la **mediana condicional** por una unidad adicional de polaridad.
+- **Escala realista.** Como una unidad completa puede ser grande para este predictor, un incremento de **0.10** en polaridad se asocia con un cambio estimado de **`r num(.1 * coef(ls_simple)[2], 4)`** en la media LS y **`r num(.1 * coef(lad_simple)[2], 4)`** en la mediana LAD.
+
+### Cómo leer *cada componente* de `summary(ls_simple)`
+
+| Campo impreso por R | Significado estadístico y lectura en este caso |
+|:--|:--|
+| `Call` | Recuerda que el modelo se ajustó con `valencia ~ polaridad_lexica`. No es un resultado inferencial. |
+| `Residuals` (`Min`, `1Q`, `Median`, `3Q`, `Max`) | Resume los errores \(e_i=y_i-\widehat y_i\) **en entrenamiento**. Los valores negativos son tuits cuya valencia real fue menor que la estimada. La mediana de residuos LS fue `r num(median(residuals(ls_simple)), 4)`; la mitad de los residuos se ubica aproximadamente a cada lado de ese número. |
+| `Estimate` | Son \(\widehat\beta_0\) y \(\widehat\beta_1\): niveles y cambios **de la media**, en puntos de valencia. |
+| `Std. Error` | Mide la incertidumbre estimada de cada coeficiente bajo el modelo clásico LS; no es el error típico de predicción de un tuit nuevo. |
+| `t value` | Divide cada estimación por su error estándar; evalúa la hipótesis de coeficiente cero. |
+| `Pr(>\|t\|)` | Es el valor \(p\) de la prueba bilateral para cada coeficiente; no es la probabilidad de que la hipótesis nula sea verdadera. |
+| `Residual standard error` | Mide la escala residual LS, en **puntos de valencia**. Aquí es **`r num(resumen_ls_simple$sigma, 4)`**, calculado con los grados de libertad residuales, no con una división por \(n\) sin ajuste. |
+| `Multiple R-squared` | En entrenamiento es **`r num(resumen_ls_simple$r.squared, 4)`**; significa que el ajuste LS representa aproximadamente **`r num(100 * resumen_ls_simple$r.squared, 1)` %** de la variabilidad de valencia observada respecto a su media. No significa precisión del `r num(100 * resumen_ls_simple$r.squared, 1)` % ni capacidad causal. |
+| `Adjusted R-squared` | Aquí es **`r num(resumen_ls_simple$adj.r.squared, 4)`**. Corrige el \(R^2\) por cantidad de predictores y tamaño de muestra. |
+| `F-statistic` | Contrasta globalmente si la(s) pendiente(s) LS es(son) cero. En regresión simple corresponde a la prueba de la única pendiente; su interpretación depende de los supuestos del modelo. |
+
+En particular, el valor \(p\) de la pendiente LS es **`r pvalor(resumen_ls_simple$coefficients['polaridad_lexica', 4])`**. Con un umbral convencional de 0.05, **`r lectura_p(resumen_ls_simple$coefficients['polaridad_lexica', 4])`**. El intervalo LS al 95 % para esa pendiente es **[`r num(ic_ls_simple[1], 4)`, `r num(ic_ls_simple[2], 4)`]**; su lectura conjunta debe considerar tanto el signo como la magnitud y la escala del predictor.
+
+### Cómo leer la salida LAD y la tabla de incertidumbre
+
+En `coef(lad_simple)` aparecen únicamente los **estimadores puntuales**, no errores estándar ni valores \(p\). Para darles una interpretación inferencial complementaria usamos la rutina especializada `summary.rq(se = "boot")`. En la tabla de pendientes:
+
+- `pendiente` es el cambio de la **mediana condicional** para LAD y el cambio de la **media condicional** para LS.
+- `error_estandar` es la dispersión estimada de cada coeficiente: en LS procede de la fórmula del modelo clásico; en LAD, del **bootstrap de 399 réplicas**.
+- `ic95_inferior` e `ic95_superior` son los extremos de los intervalos **aproximados**. Para LAD, el intervalo de la pendiente es **[`r num(ic_lad_simple[1], 4)`, `r num(ic_lad_simple[2], 4)`]**, que es **`r lectura_ic(ic_lad_simple[1], ic_lad_simple[2])`**.
+
+La tabla de pérdidas muestra **qué criterio favorece cada método**: la suma de cuadrados en LS es **`r num(tabla_objetivos_simple$suma_cuadrados[1], 3)`** y en LAD **`r num(tabla_objetivos_simple$suma_cuadrados[2], 3)`**; la suma de valores absolutos es **`r num(tabla_objetivos_simple$suma_absolutos[1], 3)`** en LS y **`r num(tabla_objetivos_simple$suma_absolutos[2], 3)`** en LAD. No deben compararse esos cuatro números como si tuvieran las mismas unidades: la suma de cuadrados utiliza **valencia al cuadrado** y la suma absoluta utiliza **valencia**. Cada método minimiza su propia columna de pérdida dentro de la familia lineal correspondiente.
+
+> Una pendiente positiva indica asociación positiva *dentro de este modelo y estos datos*; una pendiente negativa indica asociación inversa. Ninguna pendiente demuestra que escribir cierta palabra **cause** un cambio en una emoción humana.
+
+```{r lineas-simple, fig.cap="Dos objetivos de estimación sobre los mismos datos: media (LS) y mediana (LAD)."}
+rejilla <- data.frame(polaridad_lexica = seq(
+  min(entrenamiento$polaridad_lexica),
+  max(entrenamiento$polaridad_lexica), length.out = 150))
+lineas <- rbind(
+  data.frame(polaridad_lexica = rejilla$polaridad_lexica,
+             ajuste = as.numeric(predict(ls_simple, newdata = rejilla)),
+             metodo = "LS · media"),
+  data.frame(polaridad_lexica = rejilla$polaridad_lexica,
+             ajuste = as.numeric(predict(lad_simple, newdata = rejilla)),
+             metodo = "LAD · mediana")
+)
+ggplot(entrenamiento, aes(polaridad_lexica, valencia)) +
+  geom_jitter(width = .0035, height = 0, alpha = .14,
+              color = "#3f6dac", size = 1.5) +
+  geom_line(data = lineas,
+            aes(x = polaridad_lexica, y = ajuste, color = metodo),
+            inherit.aes = FALSE, linewidth = 1.35) +
+  scale_color_manual(values = c("LS · media" = "#f08f35",
+                                "LAD · mediana" = "#16a394")) +
+  labs(title = "Dos rectas, dos preguntas estadísticas",
+       subtitle = "LS describe la media; LAD describe la mediana condicional",
+       x = "Polaridad léxica", y = "Valencia (0 a 1)", color = NULL) + tema_nlp
+```
+
+# 6. Regresión múltiple e interpretación de una variable categórica
+
+Ahora queremos explicar la valencia en función de varias características simultáneamente. El modelo es
+
+\[
+\begin{aligned}
+m(\boldsymbol x)={}&\beta_0
++\beta_1\,\mathrm{densidad\_positiva}
++\beta_2\,\mathrm{densidad\_negativa}\\
+&+\beta_3\,I(\mathrm{negacion=con})
++\beta_4\,\mathrm{log\_palabras}\\
+&+\beta_5\,\mathrm{exclamaciones}
++\beta_6\,\mathrm{fraccion\_mayusculas}.
+\end{aligned}
+\]
+
+**La categoría de referencia de `negacion` es `sin`.** R construye automáticamente la variable indicadora \(I(\mathrm{negacion=con})\), que vale 1 cuando aparece una negación y 0 en el caso contrario.
+
+**Interpretación de \(\beta_3\):** diferencia ajustada de valencia entre dos tuits que tienen las *mismas demás variables explicativas*, pero que difieren en la presencia de alguna negación. Bajo LS, describe una diferencia de **medias condicionales**; bajo LAD, una diferencia de **medianas condicionales**. No representa una intervención ni el efecto causal de añadir la palabra “no”.
+
+```{r modelos-multiples}
+formula_multiple <- valencia ~ densidad_positiva + densidad_negativa +
+  negacion + log_palabras + exclamaciones + fraccion_mayusculas
+
+ls_multiple <- lm(formula_multiple, data = entrenamiento)
+lad_multiple <- quantreg::rq(formula_multiple, data = entrenamiento,
+                             tau = .5, method = "br")
+
+cat("Salida LS múltiple:\n")
+print(summary(ls_multiple))
+cat("\nCoeficientes LAD múltiple:\n")
+print(coef(lad_multiple))
+
+resumen_ls_multiple <- summary(ls_multiple)
+p_f_global <- pf(resumen_ls_multiple$fstatistic[1],
+                 resumen_ls_multiple$fstatistic[2],
+                 resumen_ls_multiple$fstatistic[3], lower.tail = FALSE)
+
+comparacion_coef <- data.frame(
+  termino = names(coef(ls_multiple)),
+  LS_media = as.numeric(coef(ls_multiple)),
+  LAD_mediana = as.numeric(coef(lad_multiple)),
+  diferencia_LAD_menos_LS = as.numeric(coef(lad_multiple) - coef(ls_multiple))
+)
+knitr::kable(comparacion_coef, digits = 4,
+             caption = "Coeficientes LS/LAD: iguales explicativas, distinta función de pérdida")
+
+escenarios_coef <- data.frame(
+  termino = c("densidad_positiva", "densidad_negativa", "negacioncon",
+              "log_palabras", "exclamaciones", "fraccion_mayusculas"),
+  variacion = c(.10, .10, 1, log1p(20) - log1p(10), 1, .10),
+  lectura = c("+10 puntos porcentuales en palabras positivas",
+              "+10 puntos porcentuales en palabras negativas",
+              "con negación frente a sin negación",
+              "20 palabras frente a 10 palabras",
+              "1 signo de exclamación adicional",
+              "+10 puntos porcentuales en mayúsculas"),
+  stringsAsFactors = FALSE
+)
+escenarios_coef$cambio_media_LS <-
+  as.numeric(coef(ls_multiple)[escenarios_coef$termino]) * escenarios_coef$variacion
+escenarios_coef$cambio_mediana_LAD <-
+  as.numeric(coef(lad_multiple)[escenarios_coef$termino]) * escenarios_coef$variacion
+knitr::kable(escenarios_coef[c("lectura", "cambio_media_LS", "cambio_mediana_LAD")],
+             digits = 4,
+             caption = "Traducción de cada coeficiente a cambios comprensibles en la valencia")
+```
+
+## 6.1. Lectura completa de la consola `summary(ls_multiple)`
+
+La salida LS múltiple tiene las mismas columnas que la simple, pero ahora cada pendiente es un **efecto ajustado** por todas las demás características del texto.
+
+- **`Estimate` y `Std. Error`:** para cada predictor, R imprime su cambio estimado en la media condicional y la incertidumbre de dicha estimación. Por ejemplo, `negacioncon` tiene estimación **`r num(coef(ls_multiple)['negacioncon'], 4)`** y error estándar **`r num(resumen_ls_multiple$coefficients['negacioncon', 2], 4)`**.
+- **`t value` y `Pr(>|t|)`:** evalúan individualmente si la pendiente LS podría ser cero **después de ajustar por las demás variables**. Para `negacioncon`, el valor \(p\) es **`r pvalor(resumen_ls_multiple$coefficients['negacioncon', 4])`**; de acuerdo con la prueba clásica, **`r lectura_p(resumen_ls_multiple$coefficients['negacioncon', 4])`**. En la misma salida, una `*` es una marca de significación convencional, no una medida de importancia práctica.
+- **`Residuals`:** los cinco cuantiles resumen las diferencias entre anotación humana y **media estimada** para los tuits de entrenamiento. Por ejemplo, la mediana del residuo es **`r num(median(residuals(ls_multiple)), 4)`** y el mayor error absoluto residual es **`r num(max(abs(residuals(ls_multiple))), 4)`** puntos.
+- **`Residual standard error`:** vale **`r num(resumen_ls_multiple$sigma, 4)`** puntos de valencia. Describe dispersión residual dentro del ajuste LS de entrenamiento; **no** debe anunciarse como MAE, RMSE de prueba ni como un error de cada predicción individual.
+- **`Multiple R-squared`:** vale **`r num(resumen_ls_multiple$r.squared, 4)`**, o **`r num(100 * resumen_ls_multiple$r.squared, 1)` %** de variabilidad de entrenamiento representada por el modelo LS. El ajuste simple alcanzó **`r num(100 * resumen_ls_simple$r.squared, 1)` %**. Incorporar variables aumenta la flexibilidad en entrenamiento, pero no asegura mejor generalización.
+- **`Adjusted R-squared`:** vale **`r num(resumen_ls_multiple$adj.r.squared, 4)`**. Ajusta la lectura anterior por los predictores empleados, aunque tampoco sustituye la validación fuera de muestra.
+- **`F-statistic`:** contrasta conjuntamente la hipótesis de que **las seis pendientes** (sin contar el intercepto) son cero. Su valor \(p\) es **`r pvalor(p_f_global)`**. Este contraste global no demuestra que cada variable sea importante ni que el modelo sea causal o adecuado para producción.
+- **Grados de libertad residuales:** R reporta **`r df.residual(ls_multiple)`**. Se obtienen restando los parámetros estimados al número de observaciones del entrenamiento y afectan a la incertidumbre estimada.
+
+## 6.2. Cómo leer las dos tablas de coeficientes
+
+La tabla **`comparacion_coef`** ofrece cuatro piezas: término, pendiente LS, pendiente LAD y diferencia `LAD − LS`. Esta diferencia indica cuánto cambió el **valor numérico del coeficiente** entre dos objetivos de estimación; **no** representa un efecto adicional sobre el tuit ni una prueba estadística de que ambos coeficientes difieran.
+
+La tabla de **cambios contextualizados** evita confundir unidades:
+
+- En las **densidades** y en la **fracción de mayúsculas**, 0.10 equivale a diez puntos porcentuales adicionales de la variable explicativa.
+- En la variable **categórica**, el salto es de 0 (`sin`) a 1 (`con`) manteniendo lo demás fijo.
+- En `log_palabras`, la comparación es de un mensaje de **10 palabras frente a otro de 20**, por lo que la diferencia de entrada es \(\log(21)-\log(11)\), no 10.
+- En `exclamaciones`, el contraste es exactamente **un signo adicional**.
+
+En cada fila de esa segunda tabla, la columna `cambio_media_LS` debe leerse como **diferencia de media de valencia estimada**; `cambio_mediana_LAD`, como **diferencia de mediana condicional estimada**. Las dos se miden en puntos de la escala 0–1 y su signo indica aumento o disminución según el ajuste particular.
+
+## 6.3. Lectura contextual de cada coeficiente
+
+1. **Término independiente.** Es la media (LS) o mediana (LAD) estimada con densidades, exclamaciones, mayúsculas y `log_palabras` iguales a cero, y sin negación. Puede ser una **configuración poco realista** de tuit; no debe interpretarse como la valencia de un “mensaje promedio”.
+2. **Densidad positiva.** Coeficiente LAD = **`r num(coef(lad_multiple)["densidad_positiva"])`**. Una subida de 0.10 de esta densidad se asocia, manteniendo el resto fijo, con un cambio aproximado de **`r num(.10 * coef(lad_multiple)["densidad_positiva"], 4)`** en la **mediana** de valencia.
+3. **Densidad negativa.** Coeficiente LAD = **`r num(coef(lad_multiple)["densidad_negativa"])`**. Su dirección estimada es de **`r interpretacion_signo(coef(lad_multiple)["densidad_negativa"])`** en la mediana condicional cuando la densidad sube, manteniendo el resto fijo.
+4. **Negación (`con` frente a `sin`).** La diferencia ajustada LAD es **`r num(coef(lad_multiple)["negacioncon"])`** puntos de valencia. La correspondiente diferencia LS es **`r num(coef(ls_multiple)["negacioncon"])`**. Aquí vemos de manera explícita cómo R convierte una **variable categórica** en un coeficiente interpretable.
+5. **Longitud (`log_palabras`).** Un incremento de **una unidad en el logaritmo de (1 + palabras)** se relaciona con un cambio de **`r num(coef(lad_multiple)["log_palabras"])`** en la mediana. **No** significa un cambio por “una palabra más”. Al comparar un tuit de 10 palabras con otro de 20 palabras (dejando fijas las demás variables), la diferencia mediana LAD sería **`r num(coef(lad_multiple)['log_palabras'] * (log1p(20) - log1p(10)), 4)`** puntos de valencia.
+6. **Exclamaciones.** Una exclamación adicional corresponde a una diferencia ajustada estimada de **`r num(coef(lad_multiple)["exclamaciones"])`** puntos en la mediana. El signo depende del corpus.
+7. **Mayúsculas.** El coeficiente LAD es **`r num(coef(lad_multiple)["fraccion_mayusculas"])`** para un cambio de 0 a 1 en la proporción; para un aumento más plausible de 0.10, el cambio estimado es **`r num(.10 * coef(lad_multiple)["fraccion_mayusculas"], 4)`**.
+
+<div class="warningbox"><strong>Precaución con los efectos parciales.</strong> Las características lingüísticas pueden estar relacionadas entre sí; además, no siempre es sencillo imaginar dos mensajes que difieran en una sola variable y mantengan absolutamente todas las demás idénticas. La interpretación de una pendiente es una comparación matemática <em>condicional al modelo</em>.</div>
+
+# 7. Inferencia estadística: ¿qué tan precisas son las pendientes LAD?
+
+La estimación puntual no es suficiente para inferir si una asociación podría ser compatible con cero. En este laboratorio usamos:
+
+- **LS:** intervalos de confianza habituales calculados por `confint(lm(...))`.
+- **LAD:** errores estándar por **bootstrap de observaciones** con `summary.rq(se = "boot", R = 399)`, dentro de la biblioteca especializada `quantreg`.
+
+Para LAD construimos intervalos **normales aproximados** a partir de los errores estándar bootstrap:
+
+\[
+IC_{95\%}(\beta_j)\approx
+\left[\widehat\beta_j-1.96\,\widehat{EE}_{\mathrm{boot}}(\widehat\beta_j),\;
+\widehat\beta_j+1.96\,\widehat{EE}_{\mathrm{boot}}(\widehat\beta_j)\right].
+\]
+
+```{r inferencia-lad}
+set.seed(2026)
+resumen_lad <- summary(lad_multiple, se = "boot", R = 399,
+                       bsmethod = "xy", covariance = TRUE)
+matriz_lad <- resumen_lad$coefficients
+coef_lad <- as.numeric(coef(lad_multiple))
+ee_lad <- as.numeric(matriz_lad[, 2])
+
+tabla_lad <- data.frame(
+  termino = names(coef(lad_multiple)),
+  estimacion = coef_lad,
+  ee_bootstrap = ee_lad,
+  ic95_inferior = coef_lad - qnorm(.975) * ee_lad,
+  ic95_superior = coef_lad + qnorm(.975) * ee_lad,
+  row.names = NULL
+)
+tabla_lad$evaluacion <- ifelse(
+  tabla_lad$ic95_inferior > 0 | tabla_lad$ic95_superior < 0,
+  "El IC excluye 0", "El IC incluye 0"
+)
+knitr::kable(tabla_lad, digits = 4,
+             caption = "Modelo LAD múltiple: inferencia bootstrap aproximada")
+
+tabla_ls <- data.frame(
+  termino = names(coef(ls_multiple)),
+  estimacion = as.numeric(coef(ls_multiple)),
+  confint(ls_multiple, level = .95),
+  check.names = FALSE
+)
+names(tabla_ls)[3:4] <- c("ic95_inferior", "ic95_superior")
+knitr::kable(tabla_ls, digits = 4,
+             caption = "Modelo LS múltiple: intervalos del modelo clásico")
+```
+
+### Lectura integral de las dos tablas inferenciales
+
+| Columna | Cómo debe interpretarse |
+|:--|:--|
+| `termino` | Explicativa a la que corresponde el coeficiente. `negacioncon` siempre se compara con la referencia `sin`. |
+| `estimacion` | Cambio de la **mediana** para LAD o de la **media** para LS, manteniendo las demás variables fijas. |
+| `ee_bootstrap` | Error estándar estimado de cada coeficiente LAD por remuestreo; refleja incertidumbre, **no** intensidad emocional. |
+| `ic95_inferior` y `ic95_superior` | Extremos de un intervalo de confianza aproximado para el coeficiente. La escala es la del efecto por unidad explicativa. |
+| `evaluacion` | Señala si el IC LAD al 95 % excluye cero; no califica importancia práctica, validez causal ni calidad predictiva. |
+
+**¿Qué aporta la inferencia que no aportaban las pendientes?** Nos permite distinguir un coeficiente estimado —que siempre tiene algún valor numérico— de la **precisión con la que se ha estimado**. Un signo grande, por sí solo, no justifica una conclusión firme si su intervalo es amplio o si la variable apenas varía en el corpus. Además, los intervalos LS clásicos se obtienen bajo supuestos de error diferentes de los empleados en el bootstrap LAD; no conviene comparar su anchura como si describieran exactamente el mismo parámetro.
+
+#### Interpretación, término por término, de los resultados calculados
+
+Las siguientes frases se generan con las estimaciones de esta ejecución. En cada caso se informa la media ajustada LS y la mediana ajustada LAD, así como la incertidumbre correspondiente.
+
+```{r comentarios-inferencia-por-termino, results='asis', echo=FALSE}
+etiquetas_coef <- c(
+  "(Intercept)" = "Intercepto (configuración de referencia)",
+  "densidad_positiva" = "Densidad de palabras positivas",
+  "densidad_negativa" = "Densidad de palabras negativas",
+  "negacioncon" = "Negación: con frente a sin",
+  "log_palabras" = "Longitud transformada del mensaje",
+  "exclamaciones" = "Número de exclamaciones",
+  "fraccion_mayusculas" = "Proporción de letras mayúsculas"
+)
+for (j in seq_len(nrow(tabla_lad))) {
+  termino_actual <- tabla_lad$termino[j]
+  ls_j <- tabla_ls[tabla_ls$termino == termino_actual, ]
+  cat(sprintf(
+    "- **%s.** LS estima **%s** (IC 95 %%: [%s, %s]; p = **%s**). LAD estima **%s** (IC bootstrap 95 %%: [%s, %s]). El intervalo LAD es **%s**.\n",
+    etiquetas_coef[[termino_actual]],
+    num(ls_j$estimacion, 4), num(ls_j$ic95_inferior, 4),
+    num(ls_j$ic95_superior, 4),
+    pvalor(resumen_ls_multiple$coefficients[termino_actual, 4]),
+    num(tabla_lad$estimacion[j], 4),
+    num(tabla_lad$ic95_inferior[j], 4),
+    num(tabla_lad$ic95_superior[j], 4),
+    lectura_ic(tabla_lad$ic95_inferior[j], tabla_lad$ic95_superior[j])
+  ))
+}
+```
+
+Los valores \(p\) de esta lista son los reportados para **LS con sus supuestos clásicos**; para LAD expresamos la evidencia mediante el **intervalo bootstrap**. Una estimación de 0.03, por ejemplo, representaría tres centésimas de la escala de valencia por unidad explicativa; su importancia sustantiva depende de cuánto pueda variar esa variable en un mensaje real.
+
+### Ejemplo de interpretación de la inferencia
+
+Para el coeficiente de **presencia de negación** en LAD obtenemos:
+
+\[
+\widehat\beta_{\mathrm{negacion}}=
+`r num(tabla_lad$estimacion[tabla_lad$termino == 'negacioncon'], 4)`,
+\qquad
+IC_{95\%}\approx
+\left[
+`r num(tabla_lad$ic95_inferior[tabla_lad$termino == 'negacioncon'], 4)`,\;
+`r num(tabla_lad$ic95_superior[tabla_lad$termino == 'negacioncon'], 4)`
+\right].
+\]
+
+El intervalo **`r tabla_lad$evaluacion[tabla_lad$termino == 'negacioncon']`**. Es una evaluación de compatibilidad estadística en el marco del modelo, **no una prueba de causalidad**. La magnitud del coeficiente debe juzgarse en la escala de valencia 0–1, incluso si el intervalo excluye cero. Un intervalo de confianza al 95 % tampoco significa que exista un 95 % de probabilidad de que el parámetro fijo esté dentro del intervalo ya calculado: el 95 % se refiere a la cobertura del procedimiento bajo sus supuestos y repeticiones hipotéticas de muestreo.
+
+```{r grafico-intervalos, fig.cap="Estimaciones LAD e intervalos de confianza aproximados del 95% basados en bootstrap."}
+coef_graf <- subset(tabla_lad, termino != "(Intercept)")
+ggplot(coef_graf, aes(x = reorder(termino, estimacion), y = estimacion)) +
+  geom_hline(yintercept = 0, color = "#c4ccd7", linetype = "dashed") +
+  geom_pointrange(aes(ymin = ic95_inferior, ymax = ic95_superior),
+                  color = "#168f8c", linewidth = .85, size = .8) +
+  coord_flip() +
+  labs(title = "¿Qué asociaciones son compatibles con cero?",
+       subtitle = "Los coeficientes están expresados en las unidades de cada predictor",
+       x = NULL, y = "Coeficiente LAD e IC 95% (aproximado)") + tema_nlp
+```
+
+**Lectura de este gráfico:** cada punto es un coeficiente LAD y el segmento vertical es su intervalo bootstrap aproximado al 95 %. La línea discontinua representa un coeficiente igual a cero. Si el intervalo atraviesa esa línea, la estimación es compatible con cero según el procedimiento utilizado. Como cada variable se mide en unidades diferentes, **no** debe ordenarse su importancia exclusivamente por la longitud del coeficiente en el eje horizontal.
+
+**Advertencia técnica.** El bootstrap ordinario supone una estructura de observaciones adecuadamente independiente y otras condiciones de regularidad. No corrige automáticamente errores del diseño, correlaciones por autor, variación de anotadores, variables omitidas ni especificación incorrecta. Con una muestra pequeña o un diseño problemático convendría comparar métodos de inferencia adicionales. Un intervalo que incluye cero **no demuestra** que la asociación sea exactamente nula.
+
+# 8. Aprendizaje supervisado: validación y prueba externa
+
+En la fase de entrenamiento aprendimos los coeficientes. Para evaluar capacidad predictiva, aplicamos ambos métodos a tuits cuyos valores de respuesta **no fueron utilizados para estimarlos**.
+
+Usaremos dos medidas de error:
+
+\[
+\operatorname{MAE}=\frac{1}{m}\sum_{i=1}^m |Y_i-\widehat Y_i|,
+\qquad
+\operatorname{RMSE}=\sqrt{\frac{1}{m}\sum_{i=1}^m(Y_i-\widehat Y_i)^2}.
+\]
+
+Y también la **correlación de Pearson** entre observación y predicción, una medida pertinente para la discusión del reto SemEval.
+
+## 8.1. Comparación justa con dos modelos basales
+
+Un modelo de IA debería superar alternativas triviales. Incluimos como referencia la media y mediana **del entrenamiento**, aplicadas sin cambios a cada mensaje de validación o prueba.
+
+```{r funciones-evaluacion}
+predecir_todos <- function(nuevos) {
+  data.frame(
+    Basal_media = rep(mean(entrenamiento$valencia), nrow(nuevos)),
+    Basal_mediana = rep(median(entrenamiento$valencia), nrow(nuevos)),
+    LS_simple = as.numeric(predict(ls_simple, newdata = nuevos)),
+    LAD_simple = as.numeric(predict(lad_simple, newdata = nuevos)),
+    LS_multiple = as.numeric(predict(ls_multiple, newdata = nuevos)),
+    LAD_multiple = as.numeric(predict(lad_multiple, newdata = nuevos)),
+    check.names = FALSE
+  )
+}
+
+metricas <- function(reales, predicciones, conjunto) {
+  salida <- lapply(names(predicciones), function(nombre) {
+    p <- predicciones[[nombre]]
+    data.frame(
+      conjunto = conjunto, modelo = nombre,
+      MAE = mean(abs(reales - p)),
+      RMSE = sqrt(mean((reales - p)^2)),
+      correlacion_Pearson = if (sd(p) > 1e-12 && sd(reales) > 1e-12) {
+        cor(reales, p)
+      } else NA_real_,
+      predicciones_fuera_0_1 = sum(p < 0 | p > 1),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, salida)
+}
+
+pred_validacion <- predecir_todos(validacion)
+resultados_validacion <- metricas(validacion$valencia,
+                                 pred_validacion, "Validación")
+resultados_validacion <- resultados_validacion[
+  order(resultados_validacion$MAE), ]
+knitr::kable(resultados_validacion, digits = 4,
+             caption = "Validación: elegir el modelo antes de examinar la prueba")
+
+modelo_elegido <- resultados_validacion$modelo[1]
+cat("Modelo seleccionado por MAE de validación:", modelo_elegido, "\n")
+
+mae_basal_mediana <- resultados_validacion$MAE[
+  resultados_validacion$modelo == "Basal_mediana"]
+mae_basal_media <- resultados_validacion$MAE[
+  resultados_validacion$modelo == "Basal_media"]
+modelo_mejor_rmse <- resultados_validacion$modelo[
+  which.min(resultados_validacion$RMSE)]
+```
+
+**Resultado contextual.** El menor MAE en validación lo consiguió **`r modelo_elegido`**, con un error absoluto medio de **`r num(resultados_validacion$MAE[1], 4)`** puntos de valencia. Esto no prueba superioridad universal: la selección puede variar con el corpus, las características lingüísticas y la métrica escogida.
+
+### Interpretación exhaustiva de la tabla de validación
+
+| Columna producida por R | Lectura estadística dentro del problema |
+|:--|:--|
+| `conjunto` | Todas las filas de esta tabla corresponden a **validación**; esas respuestas no se usaron para estimar los coeficientes. |
+| `modelo` | Identifica si se usó una constante basal, regresión simple o regresión múltiple. `LS` estima una media; `LAD` una mediana. |
+| `MAE` | Distancia **absoluta media** entre anotación humana y predicción. Menor valor significa menos error promedio en unidades originales de valencia. Es la métrica que hemos decidido emplear para seleccionar. |
+| `RMSE` | Raíz de la media de cuadrados de errores. También está en puntos de valencia; penaliza relativamente más los errores grandes. |
+| `correlacion_Pearson` | Asociación lineal entre predicción y anotación. Una correlación elevada puede coexistir con predicciones sistemáticamente desplazadas: **no sustituye al error de predicción**. |
+| `predicciones_fuera_0_1` | Recuento de resultados lineales que quedan fuera del intervalo permitido por la escala humana. No es un recuento de errores estadísticamente significativos. |
+
+**Interpretación de los basales.** `Basal_media` siempre pronostica **`r num(mean(entrenamiento$valencia), 4)`**, y `Basal_mediana` siempre pronostica **`r num(median(entrenamiento$valencia), 4)`**. Por ser constantes, su correlación de Pearson es **`NA` (no definida)**; no debe interpretarse como cero. Sus MAE de validación son, respectivamente, **`r num(mae_basal_media, 4)`** y **`r num(mae_basal_mediana, 4)`**.
+
+**Interpretación de la selección.** El modelo ganador por MAE **`r modelo_elegido`** tiene una diferencia respecto al basal de mediana de **`r num(resultados_validacion$MAE[1] - mae_basal_mediana, 4)`** puntos en MAE (valor negativo = menor error que el basal). El ganador por RMSE es **`r modelo_mejor_rmse`**, mostrando por qué es imprescindible declarar de antemano qué error queremos minimizar. El hecho de que una regresión con más variables tenga mejor \(R^2\) en entrenamiento **no obliga** a que también sea mejor en esta tabla.
+
+## 8.2. Una sola evaluación final con la partición de prueba
+
+```{r evaluacion-prueba}
+pred_prueba <- predecir_todos(prueba)
+resultados_prueba <- metricas(prueba$valencia, pred_prueba, "Prueba")
+resultados_prueba <- resultados_prueba[order(resultados_prueba$MAE), ]
+knitr::kable(resultados_prueba, digits = 4,
+             caption = "Prueba oficial: comparación descriptiva de todos los modelos")
+
+fila_elegido <- resultados_prueba[
+  resultados_prueba$modelo == modelo_elegido, , drop = FALSE]
+cat("Evaluación final del modelo elegido en validación:\n")
+print(fila_elegido)
+
+mae_validacion_elegido <- resultados_validacion$MAE[
+  resultados_validacion$modelo == modelo_elegido]
+mae_prueba_elegido <- fila_elegido$MAE
+ranking_prueba <- paste(resultados_prueba$modelo, collapse = " → ")
+```
+
+El modelo seleccionado previamente, **`r modelo_elegido`**, obtuvo en prueba un MAE de **`r num(fila_elegido$MAE, 4)`** y un RMSE de **`r num(fila_elegido$RMSE, 4)`**. Presentamos también los demás modelos para fines pedagógicos, pero **no cambiamos el modelo seleccionado usando las cifras de prueba**.
+
+### Interpretación de las seis columnas de prueba
+
+Las definiciones de MAE, RMSE y correlación son las mismas que en validación, pero ahora se aplican a los **`r nrow(prueba)` mensajes reservados para evaluación final**. La tabla se ordena de menor a mayor MAE; el orden obtenido es: **`r ranking_prueba`**. Esta clasificación final **describe** el comportamiento externo de todos los candidatos; la selección legítima ya se había fijado con validación.
+
+- El **MAE de `r modelo_elegido`** pasó de **`r num(mae_validacion_elegido, 4)`** en validación a **`r num(mae_prueba_elegido, 4)`** en prueba. La diferencia prueba menos validación es **`r num(mae_prueba_elegido - mae_validacion_elegido, 4)`** puntos. Si es positiva, el error aumentó en el conjunto final; si es negativa, disminuyó. Una diferencia no prueba por sí sola que el modelo esté sobreajustado.
+- Su **RMSE** en prueba es **`r num(fila_elegido$RMSE, 4)`**; conviene compararlo con su MAE para valorar cuánto pesan algunas predicciones alejadas del valor observado.
+- Su **correlación de Pearson** en prueba es **`r if (is.na(fila_elegido$correlacion_Pearson)) 'no definida' else num(fila_elegido$correlacion_Pearson, 4)`**. Este número evalúa la correspondencia de las variaciones entre mensajes, **no** un porcentaje de aciertos de clasificación.
+- El número de **predicciones fuera de 0–1** del modelo elegido es **`r fila_elegido$predicciones_fuera_0_1`**. Si el valor es mayor que cero, el estudiante debe explicar que una recta no respeta por construcción los límites de la variable de respuesta.
+
+```{r grafico-prueba, fig.cap="Observación humana frente a predicción fuera de muestra para los modelos LS y LAD múltiples."}
+comparacion_test <- rbind(
+  data.frame(real = prueba$valencia, predicha = pred_prueba$LS_multiple,
+             metodo = "LS múltiple"),
+  data.frame(real = prueba$valencia, predicha = pred_prueba$LAD_multiple,
+             metodo = "LAD múltiple")
+)
+ggplot(comparacion_test, aes(x = real, y = predicha, color = metodo)) +
+  geom_point(alpha = .26, size = 1.6) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed",
+              color = "#8d9cac") +
+  facet_wrap(~metodo, nrow = 1) +
+  scale_color_manual(values = c("LS múltiple" = "#ef8b40",
+                                "LAD múltiple" = "#13a096")) +
+  coord_equal() +
+  labs(title = "¿Se generalizan las relaciones lingüísticas?",
+       subtitle = "La diagonal representa predicción perfecta; la dispersión revela errores",
+       x = "Valencia humana (prueba)", y = "Valencia predicha") +
+  tema_nlp + guides(color = "none")
+```
+
+**Nota sobre la escala.** La regresión lineal no impone que \(\widehat Y\) esté entre 0 y 1. Por eso la tabla informa cuántas predicciones caen fuera de ese rango. No recortamos automáticamente los resultados, para evaluar los estimadores lineales tal como fueron ajustados.
+
+**Cómo leer la figura:** cada punto es un tuit de prueba; el eje horizontal es la **valencia anotada por personas** y el vertical es la **predicción del modelo**. Un punto por encima de la diagonal indica sobreestimación, uno por debajo indica subestimación. La dispersión vertical para una misma valencia real muestra desacuerdo entre predicción y referencia; cuanto más cerca de la diagonal, menor error absoluto. No debe confundirse la dispersión de los puntos con un intervalo de confianza para un coeficiente.
+
+# 9. Una prueba de sensibilidad: anotaciones alteradas artificialmente
+
+LAD suele ser menos sensible que LS a **errores grandes en la respuesta**, porque éstos se penalizan linealmente y no al cuadrado. Pero esa robustez **no implica** que LAD gane en todos los conjuntos ni lo protege de puntos con alta palanca.
+
+Para observar el fenómeno, modificamos **únicamente** la respuesta de una pequeña proporción de mensajes de entrenamiento; los textos y las particiones de validación y prueba permanecen intactos. Este es un **experimento simulado**, no una afirmación sobre errores reales de SemEval.
+
+```{r prueba-sensibilidad}
+set.seed(2026)
+entrenamiento_perturbado <- entrenamiento
+indices_alterados <- sample(seq_len(nrow(entrenamiento_perturbado)),
+                            size = ceiling(.05 * nrow(entrenamiento_perturbado)))
+entrenamiento_perturbado$valencia[indices_alterados] <-
+  1 - entrenamiento_perturbado$valencia[indices_alterados]
+
+ls_alterado <- lm(formula_multiple, data = entrenamiento_perturbado)
+lad_alterado <- quantreg::rq(formula_multiple,
+                             data = entrenamiento_perturbado, tau = .5)
+
+tabla_sensibilidad <- data.frame(
+  metodo = c("LS múltiple", "LAD múltiple"),
+  distancia_coeficientes = c(
+    sqrt(sum((coef(ls_alterado) - coef(ls_multiple))^2)),
+    sqrt(sum((coef(lad_alterado) - coef(lad_multiple))^2))
+  ),
+  MAE_validacion_original = c(
+    mean(abs(validacion$valencia - predict(ls_multiple, validacion))),
+    mean(abs(validacion$valencia - predict(lad_multiple, validacion)))
+  ),
+  MAE_validacion_perturbado = c(
+    mean(abs(validacion$valencia - predict(ls_alterado, validacion))),
+    mean(abs(validacion$valencia - predict(lad_alterado, validacion)))
+  )
+)
+tabla_sensibilidad$cambio_MAE <-
+  tabla_sensibilidad$MAE_validacion_perturbado -
+  tabla_sensibilidad$MAE_validacion_original
+knitr::kable(tabla_sensibilidad, digits = 4,
+             caption = "Sensibilidad al alterar el 5% de las etiquetas de entrenamiento")
+```
+
+El cambio de coeficientes se resume con una distancia euclídea; depende de la escala de cada predictor, por lo que debe utilizarse **como diagnóstico ilustrativo y no como prueba universal de robustez**. También importa si el error de validación sube o baja. El resultado se obtiene de este experimento particular.
+
+### Interpretación de todas las columnas del experimento
+
+- **`metodo`** identifica la misma estructura de regresión múltiple estimada de nuevo después de alterar las respuestas de entrenamiento; no se modifica la composición de los textos.
+- **`distancia_coeficientes`** mide cuánto se desplazó el **vector completo de coeficientes**. El desplazamiento es **`r num(tabla_sensibilidad$distancia_coeficientes[1], 4)`** para LS y **`r num(tabla_sensibilidad$distancia_coeficientes[2], 4)`** para LAD. Si uno es menor, ese estimador se movió menos en este experimento particular, aunque la comparación depende de las distintas escalas de los predictores.
+- **`MAE_validacion_original`** es el error sobre los mensajes limpios de validación con parámetros entrenados **antes** de la perturbación. No es el error sobre las etiquetas artificialmente alteradas.
+- **`MAE_validacion_perturbado`** es el error sobre **los mismos mensajes de validación** con parámetros entrenados después de cambiar algunas etiquetas de entrenamiento. Por tanto, se puede comparar con la columna anterior.
+- **`cambio_MAE`** es `perturbado − original`: para LS es **`r num(tabla_sensibilidad$cambio_MAE[1], 4)`** y para LAD es **`r num(tabla_sensibilidad$cambio_MAE[2], 4)`**. Un valor positivo implica empeoramiento del MAE en validación; uno negativo implica mejora en esa muestra. Este experimento por sí solo no permite afirmar que todas las perturbaciones favorecen a LAD.
+
+**Conclusión contextual.** De los dos modelos múltiples, el menor desplazamiento del vector de coeficientes se observó en **`r tabla_sensibilidad$metodo[which.min(tabla_sensibilidad$distancia_coeficientes)]`**, mientras que el menor cambio de MAE de validación ocurrió en **`r tabla_sensibilidad$metodo[which.min(tabla_sensibilidad$cambio_MAE)]`**. Estos criterios pueden señalar métodos distintos porque **estabilidad de parámetros y calidad predictiva no son equivalentes**.
+
+# 10. La aplicación funcionando: evaluar nuevos textos
+
+El paso final en un flujo de IA es recibir textos nunca vistos, generar **exactamente las mismas características** usadas para entrenar y producir una estimación. No poseemos anotaciones humanas para estos mensajes inventados: las cifras siguientes son únicamente **salidas del modelo**.
+
+```{r nuevos-tuits}
+ejemplos_nuevos <- data.frame(
+  id = c("nuevo_1", "nuevo_2", "nuevo_3", "nuevo_4"),
+  texto = c(
+    "¡Me encanta esta excelente noticia! Gracias por compartirla.",
+    "Odio esta noticia, es horrible y terrible.",
+    "No, esta noticia no es buena, estoy triste.",
+    "Hoy compartieron una noticia sobre el proyecto."
+  ),
+  valencia = NA_real_,
+  particion = "Ejemplo nuevo",
+  stringsAsFactors = FALSE
+)
+ejemplos_nuevos <- extraer_variables(ejemplos_nuevos)
+
+tabla_nuevos <- data.frame(
+  texto = ejemplos_nuevos$texto,
+  polaridad = ejemplos_nuevos$polaridad_lexica,
+  negacion = ejemplos_nuevos$negacion,
+  LS = as.numeric(predict(ls_multiple, newdata = ejemplos_nuevos)),
+  LAD = as.numeric(predict(lad_multiple, newdata = ejemplos_nuevos))
+)
+tabla_nuevos$diferencia_LAD_menos_LS <- tabla_nuevos$LAD - tabla_nuevos$LS
+knitr::kable(tabla_nuevos, digits = 3,
+             caption = "Inferencias predictivas ilustrativas sobre mensajes creados para la clase")
+```
+
+### Interpretación completa de las nuevas predicciones
+
+- **`texto`** es la entrada del sistema. Aquí escribimos cuatro oraciones de ejemplo, no extraídas del corpus protegido.
+- **`polaridad`** es la diferencia de densidades positivas y negativas calculada con el diccionario pedagógico; no es la puntuación humana.
+- **`negacion`** muestra la categoría `con`/`sin` del análisis lingüístico, utilizando las mismas reglas que en entrenamiento.
+- **`LS`** es una **media condicional estimada** a partir del vector de características; **`LAD`** es una **mediana condicional estimada**. Son dos resúmenes estadísticos distintos, no dos evaluadores humanos de un tuit.
+- **`diferencia_LAD_menos_LS`** indica la diferencia entre ambas predicciones para el mismo texto. No dice cuál de las dos es correcta, porque estos ejemplos **no tienen una etiqueta real observada**.
+
+**Lectura mensaje por mensaje:**
+
+1. **Mensaje con léxico favorable.** El texto «Me encanta esta excelente noticia…» tiene polaridad creada **`r num(tabla_nuevos$polaridad[1], 3)`** y obtiene LS **`r num(tabla_nuevos$LS[1], 3)`** frente a LAD **`r num(tabla_nuevos$LAD[1], 3)`**. Esto es una estimación estadística de su valencia, no una certeza de que el autor se sienta feliz.
+2. **Mensaje con términos negativos.** El texto «Odio esta noticia…» obtiene LS **`r num(tabla_nuevos$LS[2], 3)`** y LAD **`r num(tabla_nuevos$LAD[2], 3)`**. La diferencia con el primer caso combina cambios en varias características (palabras, negaciones, extensión y exclamaciones): no debe atribuirse a una única palabra sin un contraste controlado.
+3. **Mensaje con negación.** «No, esta noticia no es buena…» tiene categoría **`r as.character(tabla_nuevos$negacion[3])`** y predicciones LS **`r num(tabla_nuevos$LS[3], 3)`** y LAD **`r num(tabla_nuevos$LAD[3], 3)`**. El modelo reconoce la presencia de negación, pero no analiza automáticamente qué expresión está siendo negada.
+4. **Mensaje informativo.** «Hoy compartieron una noticia…» obtiene LS **`r num(tabla_nuevos$LS[4], 3)`** y LAD **`r num(tabla_nuevos$LAD[4], 3)`**. Un texto sin términos del diccionario no tiene que producir una predicción exactamente igual a 0.5: intervienen el intercepto y las otras características.
+
+**Advertencia de aplicación.** No sabemos si esas cuatro predicciones son acertadas. Para comprobarlo necesitaríamos obtener valoraciones humanas independientes del mismo protocolo que empleó el corpus original. Las puntuaciones, además, podrían estar fuera de 0–1 porque LS y LAD lineales no imponen esas restricciones.
+
+<div class="promptbox"><strong>Discusión.</strong> ¿Por qué el tercer tuit es difícil? La palabra <em>buena</em> aparece junto a <em>no</em>. Nuestro modelo solo aprende asociaciones estadísticas entre variables codificadas, no comprende necesariamente la composición semántica de la frase.</div>
+
+# 11. Actividades y solucionario del docente
+
+Las respuestas numéricas que aparecen aquí se **calculan automáticamente** sobre la copia oficial del corpus, así que sirven tanto para clase como para repaso.
+
+### Actividad 1. Identificar el problema supervisado
+
+**Pregunta.** ¿Cuál es la respuesta? ¿Qué son las variables explicativas? ¿En qué sentido este ejercicio pertenece al aprendizaje supervisado?
+
+<details><summary>Ver respuesta razonada</summary>
+
+La respuesta es `valencia`, una puntuación numérica entre 0 y 1 aportada por anotación humana. Las explicativas son transformaciones del texto (densidades de palabras, negación, extensión, exclamaciones y mayúsculas). Es supervisado porque el ajuste utiliza pares entrada–respuesta: características de cada tuit y su puntuación conocida. En el conjunto de prueba se predice la respuesta de tuits distintos de los del entrenamiento.
+
+</details>
+
+### Actividad 2. Proteger la evaluación frente a filtración de datos
+
+**Pregunta.** ¿Por qué no usamos los `r nrow(prueba)` tuits de prueba para seleccionar qué variables conservar o elegir el mejor modelo?
+
+<details><summary>Ver respuesta razonada</summary>
+
+Porque usar la prueba para tomar decisiones sobre el modelo convertiría esa prueba en parte del entrenamiento indirecto y haría demasiado optimista el error reportado. Solo la partición de validación participa en la selección; la prueba sirve para una evaluación final. El vocabulario del ejercicio se definió a priori y no se construyó a partir de las etiquetas de prueba.
+
+</details>
+
+### Actividad 3. Interpretar las dos pendientes simples
+
+**Pregunta.** ¿Qué significa el coeficiente de `polaridad_lexica` en LS? ¿Y en LAD? Interprete un incremento de 0.10.
+
+<details><summary>Ver respuesta con los valores calculados</summary>
+
+En LS la pendiente es **`r num(coef(ls_simple)["polaridad_lexica"], 4)`** y corresponde a una diferencia en la **media condicional** por unidad de polaridad. En LAD es **`r num(coef(lad_simple)["polaridad_lexica"], 4)`** y corresponde a una diferencia en la **mediana condicional**. Para un incremento de 0.10, las diferencias estimadas son **`r num(.10 * coef(ls_simple)["polaridad_lexica"], 4)`** y **`r num(.10 * coef(lad_simple)["polaridad_lexica"], 4)`**, respectivamente. Son asociaciones dentro del modelo, no efectos causales.
+
+</details>
+
+### Actividad 4. Explicar una variable categórica
+
+**Pregunta.** ¿Qué codifica el coeficiente `negacioncon`? ¿Cuál es su categoría de referencia?
+
+<details><summary>Ver respuesta con valores de LS y LAD</summary>
+
+La categoría de referencia es **`sin`**. El coeficiente corresponde a la diferencia entre mensajes `con` y `sin` negación, **a igualdad matemática de las demás características**. Es **`r num(coef(ls_multiple)["negacioncon"], 4)`** puntos para la media estimada por LS y **`r num(coef(lad_multiple)["negacioncon"], 4)`** para la mediana estimada por LAD. No debe confundirse con el significado de una negación en cualquier frase específica.
+
+</details>
+
+### Actividad 5. Interpretar inferencia, no solo signos
+
+**Pregunta.** ¿El IC bootstrap al 95% de `negacioncon` incluye cero? ¿Cómo debe comunicarse?
+
+<details><summary>Ver respuesta basada en el intervalo calculado</summary>
+
+El IC aproximado es **[`r num(tabla_lad$ic95_inferior[tabla_lad$termino == 'negacioncon'], 4)`, `r num(tabla_lad$ic95_superior[tabla_lad$termino == 'negacioncon'], 4)`]**. **`r tabla_lad$evaluacion[tabla_lad$termino == 'negacioncon']`**. Si contiene cero, los datos no permiten excluir un efecto ajustado nulo al nivel y con el procedimiento de intervalo utilizados; si lo excluye, existe evidencia de asociación condicional compatible con un coeficiente distinto de cero. Ninguna de las dos conclusiones implica causalidad.
+
+</details>
+
+### Actividad 6. Elegir un modelo con datos de validación
+
+**Pregunta.** ¿Qué modelo tiene menor MAE de validación? ¿Coincide con el de menor RMSE?
+
+<details><summary>Ver respuesta dinámica</summary>
+
+El menor MAE lo tiene **`r modelo_elegido`**: **`r num(min(resultados_validacion$MAE), 4)`**. El menor RMSE corresponde a **`r resultados_validacion$modelo[which.min(resultados_validacion$RMSE)]`**: **`r num(min(resultados_validacion$RMSE), 4)`**. Estas medidas no tienen por qué seleccionar el mismo ajuste porque MAE penaliza desviaciones absolutas y RMSE da más peso a errores grandes.
+
+</details>
+
+### Actividad 7. Comparar rendimiento de LS y LAD en prueba
+
+**Pregunta.** Entre los modelos *múltiples*, ¿cuál obtiene menor MAE de prueba? ¿Significa que es siempre mejor?
+
+<details><summary>Ver respuesta con evaluación externa</summary>
+
+El MAE del modelo LS múltiple es **`r num(resultados_prueba$MAE[resultados_prueba$modelo == 'LS_multiple'], 4)`** y el de LAD múltiple **`r num(resultados_prueba$MAE[resultados_prueba$modelo == 'LAD_multiple'], 4)`**. En este corpus y con este vocabulario concreto, el menor corresponde a **`r if (resultados_prueba$MAE[resultados_prueba$modelo == 'LS_multiple'] <= resultados_prueba$MAE[resultados_prueba$modelo == 'LAD_multiple']) 'LS múltiple' else 'LAD múltiple'`**. No implica superioridad general: el resultado depende del fenómeno, la muestra, las características extraídas y la métrica.
+
+</details>
+
+### Actividad 8. Sensibilidad ante anomalías
+
+**Pregunta.** Tras alterar artificialmente algunas respuestas de entrenamiento, ¿qué sucede con la estabilidad de los coeficientes y el error de validación?
+
+<details><summary>Ver respuesta con el experimento simulado</summary>
+
+La distancia euclídea entre los coeficientes LS antes y después es **`r num(tabla_sensibilidad$distancia_coeficientes[1], 4)`**, y en LAD es **`r num(tabla_sensibilidad$distancia_coeficientes[2], 4)`**. El MAE en validación después de la alteración fue **`r num(tabla_sensibilidad$MAE_validacion_perturbado[1], 4)`** para LS y **`r num(tabla_sensibilidad$MAE_validacion_perturbado[2], 4)`** para LAD. La interpretación debe considerar ambos indicadores: menor desplazamiento de coeficientes no garantiza por sí mismo mejor predicción. Este experimento prueba sensibilidad local a una intervención simulada, no robustez universal.
+
+</details>
+
+### Actividad 9. Diseñar una mejora de PLN que conserve interpretabilidad
+
+**Pregunta.** Proponga una nueva variable que permita que la asociación de palabras positivas con valencia difiera según exista negación. ¿Cómo interpretaría el resultado?
+
+<details><summary>Ver solución y código opcional</summary>
+
+Se puede incluir la **interacción** `densidad_positiva:negacion` sin eliminar los términos principales. En el modelo `valencia ~ densidad_positiva * negacion + ...`, la pendiente de densidad positiva **sin** negación es \(\beta_1\), mientras que **con** negación pasa a ser \(\beta_1+\beta_{\mathrm{interaccion}}\). El coeficiente de interacción compara ambas pendientes, manteniendo fijas las otras explicativas. Esta extensión sigue siendo lineal en coeficientes, aunque permite dos rectas con pendientes distintas por categoría.
+
+</details>
+
+```{r extension-interaccion, eval=FALSE}
+# Extensión opcional para discutir en clase: NO entra en la comparación de prueba.
+modelo_interaccion <- quantreg::rq(
+  valencia ~ densidad_positiva * negacion + densidad_negativa +
+    log_palabras + exclamaciones + fraccion_mayusculas,
+  tau = .5, data = entrenamiento
+)
+summary(modelo_interaccion, se = "boot", R = 399)
+```
+
+### Actividad 10. Del modelo estadístico a la IA responsable
+
+**Pregunta.** Indique tres razones por las cuales este ejemplo no debe desplegarse directamente como un detector fiable de emociones de cualquier usuario.
+
+<details><summary>Ver respuesta razonada</summary>
+
+1. El vocabulario didáctico es muy limitado: desconoce matices lingüísticos, sarcasmo, emojis y variaciones dialectales.
+2. Los tuits de 2018 no garantizan representatividad de otros públicos, años, plataformas o contextos. Un buen MAE en prueba no asegura validez externa universal.
+3. La puntuación es una anotación de valencia del **texto**, no un diagnóstico del estado emocional real de quien lo escribió. Hacer inferencias personales invasivas sería una extrapolación injustificada. Además, se deben respetar las restricciones del corpus.
+
+</details>
+
+# 12. Conclusiones para conectar estadística, PLN e IA
+
+1. Un modelo de regresión puede ser una herramienta **explicable** de aprendizaje automático supervisado si definimos una variable objetivo y extraemos características de las entradas.
+2. **LS y LAD no responden exactamente la misma pregunta estadística:** el primero resume una media condicional; el segundo, una mediana condicional.
+3. La regresión múltiple permite estudiar asociaciones **ajustadas**; R convierte variables categóricas en indicadores con una categoría de referencia explícita.
+4. La inferencia de los coeficientes —incluidos los intervalos bootstrap— exige **supuestos y precauciones**; una asociación estadística no equivale a causalidad.
+5. Las medidas de error en validación y prueba son parte del flujo supervisado, pero su objetivo aquí es complementar, no sustituir, la interpretación.
+
+## Plantilla para interpretar cualquier salida nueva de R
+
+Cuando el estudiante reciba otra base de datos o cambie las variables lingüísticas, debería ser capaz de escribir estas **siete frases**, reemplazando los espacios por sus resultados:
+
+1. **Respuesta y contexto:** «La variable respuesta es ..., medida en ...; los individuos observados son ...».
+2. **Función del método:** «Con `lm()` estoy modelando aproximadamente la media condicional; con `rq(tau = .5)`, la mediana condicional».
+3. **Coeficiente y unidad:** «Si la explicativa ... aumenta ... unidades, manteniendo las demás constantes, la media/mediana estimada de la respuesta cambia ... unidades».
+4. **Categorías:** «Para el grupo ... frente al grupo de referencia ..., la diferencia ajustada estimada es ...».
+5. **Incertidumbre:** «El error estándar es ... y el IC al 95 % va de ... a ...; estos datos [son/no son] compatibles con un coeficiente igual a cero bajo los supuestos del procedimiento».
+6. **Ajuste frente a generalización:** «En entrenamiento, el \(R^2\) LS es ...; en validación/prueba, el MAE es ... y el RMSE es ...; estas cifras miden aspectos diferentes».
+7. **Límite del análisis:** «La asociación estimada no prueba causalidad y la representación lingüística puede omitir ...».
+
+<div class="promptbox"><strong>Idea de cierre para discusión.</strong> La utilidad de LS y LAD en inteligencia artificial no se reduce a obtener predicciones: ambos procedimientos también permiten formular <em>preguntas interpretables</em> sobre la relación entre representaciones de textos y valoraciones humanas, siempre que respetemos las condiciones del diseño y de la inferencia.</div>
+
+<div class="keybox"><strong>Puente hacia métodos posteriores.</strong> Con un vocabulario de miles de términos o vectores TF-IDF, el número de predictores puede superar el número de tuits. En ese escenario aparecen dificultades de identificación y sobreajuste, lo que motiva estudiar regularización, como Ridge, además de otros métodos robustos.</div>
+
+# Referencias y atribución
+
+- **Mohammad, S. M., Bravo-Marquez, F., Salameh, M. y Kiritchenko, S. (2018).** *SemEval-2018 Task 1: Affect in Tweets*. Proceedings of the 12th International Workshop on Semantic Evaluation, 1–17. Association for Computational Linguistics. <https://aclanthology.org/S18-1001/>.
+- **Mohammad, S. M.** *Emotion, Sentiment, and Stance Labeled Data*. Página oficial del autor, condiciones de uso y enlace al corpus. <https://saifmohammad.com/WebPages/SentimentEmotionLabeledData.html>.
+- **Koenker, R.** *quantreg: Quantile Regression*. Paquete de R y documentación de la implementación de `rq()` y su inferencia. <https://cran.r-project.org/package=quantreg>.
+- **R Core Team.** *R: A Language and Environment for Statistical Computing*. Función `lm()` y documentación del entorno. <https://www.r-project.org/>.
+
+**Nota de uso docente.** El diccionario lingüístico y las actividades de este documento fueron construidos para fines educativos y no forman parte de los baselines oficiales del reto SemEval. Las interpretaciones numéricas se recalculan sobre el corpus oficial al compilar. Los datos originales permanecen únicamente en el equipo de quien realiza la práctica.

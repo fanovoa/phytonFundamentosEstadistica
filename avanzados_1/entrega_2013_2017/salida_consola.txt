@@ -1,0 +1,352 @@
+
+
+==============================================================================
+1. CARGA DE LOS DATOS
+==============================================================================
+Origen: exportacion CSV UTF-8 del .xlsx original.
+Dimensiones: 281386 filas x 5 columnas
+
+Nombres de las variables:
+[1] "Fecha"    "Grupo"    "Producto" "Fuente"   "Precio"  
+
+Estructura (str):
+'data.frame':	281386 obs. of  5 variables:
+ $ Fecha   : Date, format: "2013-01-01" "2013-01-01" ...
+ $ Grupo   : chr  "CARNES" "CARNES" "CARNES" "CARNES" ...
+ $ Producto: chr  "Alas de pollo con costillar" "Alas de pollo con costillar" "Alas de pollo con costillar" "Alas de pollo con costillar" ...
+ $ Fuente  : chr  "Barranquilla, Barranquillita" "Barranquilla, Granabastos" "Bogotá, D.C., Frigorífico Ble Ltda." "Bogotá, D.C., Frigorífico Guadalupe" ...
+ $ Precio  : int  3073 3067 2967 2560 3429 4307 3717 3800 3780 4500 ...
+
+Primeras 6 filas (head):
+       Fecha  Grupo                    Producto
+1 2013-01-01 CARNES Alas de pollo con costillar
+2 2013-01-01 CARNES Alas de pollo con costillar
+3 2013-01-01 CARNES Alas de pollo con costillar
+4 2013-01-01 CARNES Alas de pollo con costillar
+5 2013-01-01 CARNES Alas de pollo con costillar
+6 2013-01-01 CARNES Alas de pollo con costillar
+                               Fuente Precio
+1        Barranquilla, Barranquillita   3073
+2           Barranquilla, Granabastos   3067
+3 Bogotá, D.C., Frigorífico Ble Ltda.   2967
+4 Bogotá, D.C., Frigorífico Guadalupe   2560
+5                  Cartagena, Bazurto   3429
+6                 Ibagué, Plaza La 21   4307
+
+Ultimas 6 filas (tail):
+            Fecha      Grupo Producto                        Fuente Precio
+281381 2017-12-01 PROCESADOS  Vinagre            Cúcuta, Cenabastos   1521
+281382 2017-12-01 PROCESADOS  Vinagre        Cúcuta, La Nueva Sexta   1563
+281383 2017-12-01 PROCESADOS  Vinagre Pamplona (Norte de Santander)   1549
+281384 2017-12-01 PROCESADOS  Vinagre       Santa Marta (Magdalena)   1165
+281385 2017-12-01 PROCESADOS  Vinagre      Sincelejo, Nuevo Mercado   2233
+281386 2017-12-01 PROCESADOS  Vinagre     Valledupar, Mercado Nuevo   1111
+
+Resumen automatico (summary):
+     Fecha                  Grupo             Producto            Fuente      
+ Min.   :2013-01-01   Length   :281386   Length   :281386   Length   :281386  
+ 1st Qu.:2014-04-01   N.unique :     8   N.unique :   376   N.unique :    97  
+ Median :2015-07-01   N.blank  :     0   N.blank  :     0   N.blank  :     0  
+ Mean   :2015-06-25   Min.nchar:     6   Min.nchar:     3   Min.nchar:    11  
+ 3rd Qu.:2016-10-01   Max.nchar:    29   Max.nchar:    35   Max.nchar:    44  
+ Max.   :2017-12-01                                                           
+     Precio     
+ Min.   :   82  
+ 1st Qu.: 1194  
+ Median : 2490  
+ Mean   : 5244  
+ 3rd Qu.: 7182  
+ Max.   :89556  
+
+
+==============================================================================
+2. CONTROL DE CALIDAD DE LOS DATOS
+==============================================================================
+Valores faltantes (NA) en toda la base ....... 0 
+Duplicados exactos (Fecha,Producto,Fuente) ... 0 
+Precios menores o iguales a cero ............. 0 
+Meses observados ............................. 60 ( 2013-01 a 2017-12 )
+Meses faltantes en la secuencia .............. 0 
+Fuentes antes de unificar tildes ............. 97 
+Fuentes despues de unificar tildes ........... 96 (se unifico Ancuya / Ancuya, con y sin tilde)
+
+Estado de completitud: BASE COMPLETA Y CONSISTENTE 
+
+
+==============================================================================
+3. VARIABLES CUALITATIVAS DERIVADAS: departamento, region, tipo de mercado
+==============================================================================
+Fuentes totales ............... 96 
+Sin departamento asignado ..... 0 
+Sin region asignada ........... 0 
+
+Fuentes por tipo de mercado:
+
+  Central mayorista urbana Mercado municipal / acopio 
+                        46                         50 
+
+Fuentes por region:
+
+            Andina             Caribe Orinoquía-Amazonía           Pacífica 
+                57                 15                  4                 20 
+  tabla guardada: 00_diccionario_fuentes.csv
+
+
+==============================================================================
+4. DISENO: DE 281.386 FILAS A 451 UNIDADES DE ANALISIS
+==============================================================================
+Productos de la canasta ............. 16 
+Series producto-plaza candidatas .... 611 
+Series con los 60 meses completos ... 451 
+Filas del panel balanceado .......... 27060 
+Verificacion de panel balanceado ....  TRUE  ( 451 series x 60 meses )
+
+UNIDAD DE ANALISIS: serie plaza-producto.  n = 451 
+
+'data.frame':	451 obs. of  14 variables:
+ $ Producto       : chr  "Arroz de primera" "Arroz de primera" "Arroz de primera" "Arroz de primera" ...
+ $ Fuente         : chr  "Armenia, Mercar" "Barranquilla, Barranquillita" "Barranquilla, Granabastos" "Bogotá, D.C., Corabastos" ...
+ $ Grupo          : Factor w/ 8 levels "CARNES","FRUTAS",..: 3 3 3 3 3 3 3 3 3 3 ...
+ $ region         : Factor w/ 4 levels "Andina","Caribe",..: 1 2 2 1 1 1 1 4 4 4 ...
+ $ tipo_mercado   : Factor w/ 2 levels "Central mayorista urbana",..: 1 1 1 1 1 1 1 2 1 1 ...
+ $ departamento   : chr  "Quindío" "Atlántico" "Atlántico" "Bogotá D.C." ...
+ $ precio_promedio: num  2556 2473 2468 2410 2580 ...
+ $ precio_mediano : num  2626 2555 2542 2372 2586 ...
+ $ desv_est       : num  347 381 357 398 345 ...
+ $ precio_min     : int  2143 1922 1983 1951 2113 2085 2227 2249 1959 1883 ...
+ $ precio_max     : int  3340 3226 3173 3255 3296 3318 3403 3366 3198 3352 ...
+ $ rango          : int  1197 1304 1190 1304 1183 1233 1176 1117 1239 1469 ...
+ $ volatilidad_cv : num  13.6 15.4 14.5 16.5 13.4 ...
+ $ variacion_13_17: num  14.54 20.48 16.4 6.06 10.78 ...
+  tabla guardada: 01_unidades_analisis.csv
+
+
+==============================================================================
+5. VARIABLES CUANTITATIVAS: LAS OCHO MEDIDAS QUE EXIGE LA GUIA
+==============================================================================
+                 [,1]               [,2]                   
+variable         volatilidad_cv (%) variacion_2013_2017 (%)
+n                451                451                    
+media            23.26584           29.43704               
+mediana          22.17200           20.50846               
+clase_modal      (19.2,25]          (-3.53,18.1]           
+minimo             1.732396         -25.183785             
+maximo            59.94067          191.32472              
+rango             58.20828          216.50850              
+desv_estandar    12.45757           32.65372               
+varianza          155.1911          1066.2653              
+q1               13.64054           12.37735               
+q3               30.73562           33.87051               
+IQR              17.09508           21.49316               
+asimetria        0.4800966          2.2654045              
+exceso_curtosis  -0.402026           5.555046              
+atipicos_1_5_IQR  2                 42                     
+  tabla guardada: 02_medidas_cuantitativas.csv
+
+Lectura:
+- volatilidad_cv: media 23.27 y mediana 22.17 casi coinciden; asimetria 0.48 -> la media es una medida de centro razonable.
+- variacion_2013_2017: media 29.44 supera ampliamente a la mediana 20.51 ; asimetria 2.265 -> muy sesgada a la derecha: se reporta MEDIANA e IQR.
+
+Correlacion volatilidad vs variacion 2013-2017:
+  Pearson  = 0.443 
+  Spearman = 0.404 
+
+
+==============================================================================
+6. VARIABLES CUALITATIVAS: FRECUENCIA ABSOLUTA, RELATIVA Y PORCENTAJE
+==============================================================================
+ variable                     categoria frecuencia frecuencia_relativa
+    Grupo         VERDURAS Y HORTALIZAS        109              0.2417
+    Grupo                        FRUTAS         73              0.1619
+    Grupo TUBERCULOS, RAICES Y PLATANOS         64              0.1419
+    Grupo                    PROCESADOS         58              0.1286
+    Grupo             GRANOS Y CEREALES         56              0.1242
+    Grupo                        CARNES         44              0.0976
+    Grupo              LACTEOS Y HUEVOS         37              0.0820
+    Grupo                      PESCADOS         10              0.0222
+ porcentaje frecuencia_acumulada porcentaje_acumulado
+      24.17                  109                24.17
+      16.19                  182                40.35
+      14.19                  246                54.55
+      12.86                  304                67.41
+      12.42                  360                79.82
+       9.76                  404                89.58
+       8.20                  441                97.78
+       2.22                  451               100.00
+
+ variable          categoria frecuencia frecuencia_relativa porcentaje
+   region             Andina        246              0.5455      54.55
+   region           Pacífica         99              0.2195      21.95
+   region             Caribe         91              0.2018      20.18
+   region Orinoquía-Amazonía         15              0.0333       3.33
+ frecuencia_acumulada porcentaje_acumulado
+                  246                54.55
+                  345                76.50
+                  436                96.67
+                  451               100.00
+
+     variable                  categoria frecuencia frecuencia_relativa
+ tipo_mercado   Central mayorista urbana        327              0.7251
+ tipo_mercado Mercado municipal / acopio        124              0.2749
+ porcentaje frecuencia_acumulada porcentaje_acumulado
+      72.51                  327                72.51
+      27.49                  451               100.00
+
+  tabla guardada: 03_frecuencias_cualitativas.csv
+Categoria mas frecuente en Grupo ........ VERDURAS Y HORTALIZAS - 109 unidades ( 24.17 %)
+Categoria mas frecuente en region ....... Andina - 246 unidades ( 54.55 %)
+Categoria mas frecuente en tipo_mercado . Central mayorista urbana - 327 unidades ( 72.51 %)
+
+
+==============================================================================
+7. COMPARACION ENTRE GRUPOS
+==============================================================================
+Volatilidad del precio (CV %) por grupo de alimento:
+ variable                     categoria   n cv_media cv_mediana cv_desv cv_min
+    Grupo                    PROCESADOS  58     7.26       6.71    3.51   1.73
+    Grupo                        CARNES  44    12.19      10.84    5.36   4.07
+    Grupo                      PESCADOS  10    13.75      13.20    3.77   8.87
+    Grupo              LACTEOS Y HUEVOS  37    13.83      13.65    2.90   8.23
+    Grupo                        FRUTAS  73    23.48      23.05    3.67  17.44
+    Grupo         VERDURAS Y HORTALIZAS 109    30.54      30.14    8.55   4.45
+    Grupo             GRANOS Y CEREALES  56    27.89      30.89   12.89  12.75
+    Grupo TUBERCULOS, RAICES Y PLATANOS  64    35.66      36.24   11.42  13.63
+ cv_max
+  21.03
+  23.88
+  19.62
+  20.91
+  34.69
+  59.94
+  48.07
+  57.82
+
+Volatilidad del precio (CV %) por region:
+ variable          categoria   n cv_media cv_mediana cv_desv cv_min cv_max
+   region             Caribe  91    19.98      19.75    9.85   3.65  41.12
+   region           Pacífica  99    21.45      20.77   11.36   3.29  50.63
+   region Orinoquía-Amazonía  15    20.75      21.21   11.19   5.20  44.04
+   region             Andina 246    25.37      23.58   13.44   1.73  59.94
+
+Volatilidad del precio (CV %) por tipo de mercado:
+     variable                  categoria   n cv_media cv_mediana cv_desv cv_min
+ tipo_mercado   Central mayorista urbana 327    21.25      20.29   11.61   1.73
+ tipo_mercado Mercado municipal / acopio 124    28.57      26.96   13.09   3.29
+ cv_max
+  55.65
+  59.94
+  tabla guardada: 04_volatilidad_por_grupo.csv
+
+El grupo mas volatil es TUBERCULOS, RAICES Y PLATANOS con CV mediano 36.24 %
+El grupo mas estable es PROCESADOS con CV mediano 6.71 %
+Razon entre extremos: 5.4 veces
+
+Nivel y volatilidad segun tipo de mercado:
+               tipo_mercado   n precio_mediano cv_mediano
+   Central mayorista urbana 327           2001      20.29
+ Mercado municipal / acopio 124           1639      26.96
+  tabla guardada: 05_nivel_y_volatilidad_por_mercado.csv
+
+
+==============================================================================
+8. FIGURAS
+==============================================================================
+  figura guardada: 01_barras_grupo.png
+  figura guardada: 02_sectores_tipo_mercado.png
+  figura guardada: 03_histograma_volatilidad.png
+  figura guardada: 04_caja_volatilidad_por_grupo.png
+  figura guardada: 05_dispersion_volatilidad_variacion.png
+
+
+==============================================================================
+9. PRODUCTO TESTIGO: TOMATE DE ARBOL
+==============================================================================
+Plazas con serie completa: 39 
+
+                 [,1]                                 
+variable         precio_promedio tomate de arbol (COP)
+n                39                                   
+media            1639.39                              
+mediana          1702.233                             
+clase_modal      (1.66e+03,1.79e+03]                  
+minimo           1144.133                             
+maximo           2054.6                               
+rango            910.4667                             
+desv_estandar    233.1348                             
+varianza         54351.81                             
+q1               1458.108                             
+q3               1820.917                             
+IQR              362.8083                             
+asimetria        -0.4399933                           
+exceso_curtosis  -0.7426918                           
+atipicos_1_5_IQR 0                                    
+  tabla guardada: 06_medidas_tomate_de_arbol.csv
+
+Tabla de frecuencias agrupada (regla de Sturges, k = 7 ):
+               clase frecuencia frecuencia_relativa porcentaje
+ [1.14e+03,1.27e+03]          2              0.0513       5.13
+  (1.27e+03,1.4e+03]          6              0.1538      15.38
+  (1.4e+03,1.53e+03]          4              0.1026      10.26
+ (1.53e+03,1.66e+03]          4              0.1026      10.26
+ (1.66e+03,1.79e+03]         12              0.3077      30.77
+ (1.79e+03,1.92e+03]          8              0.2051      20.51
+ (1.92e+03,2.05e+03]          3              0.0769       7.69
+ frecuencia_acumulada porcentaje_acumulado
+                    2                 5.13
+                    8                20.51
+                   12                30.77
+                   16                41.03
+                   28                71.79
+                   36                92.31
+                   39               100.00
+Clase modal: (1.66e+03,1.79e+03] 
+  tabla guardada: 07_frecuencias_agrupadas_tomate.csv
+
+Cinco plazas mas baratas:
+                   Fuente departamento precio_promedio volatilidad_cv
+       Sonsón (Antioquia)    Antioquia        1144.133       30.11742
+ El Santuario (Antioquia)    Antioquia        1186.100       28.47346
+  San Vicente (Antioquia)    Antioquia        1276.483       27.00177
+    Marinilla (Antioquia)    Antioquia        1279.817       26.43122
+        Peñol (Antioquia)    Antioquia        1287.350       26.68751
+
+Cinco plazas mas caras:
+                         Fuente    departamento precio_promedio volatilidad_cv
+          Chiquinquirá (Boyacá)          Boyacá        2054.600       19.15221
+             Villavicencio, CAV            Meta        1986.050       17.43780
+ Buenaventura (Valle del Cauca) Valle del Cauca        1937.933       21.50106
+            San Gil (Santander)       Santander        1903.933       19.61460
+            Socorro (Santander)       Santander        1898.583       19.72745
+
+Brecha entre la plaza mas cara y la mas barata: 1.8 veces
+Precio de referencia sugerido - mediana: 1702 COP
+Franja intercuartilica: de 1458 a 1821 COP
+  figura guardada: 06_tomate_por_tipo_mercado.png
+
+
+==============================================================================
+10. RESPUESTA DESCRIPTIVA A LA PREGUNTA DE INVESTIGACION
+==============================================================================
+No existe un precio justo nacional unico.
+
+1) Para el tomate de arbol, el precio promedio 2013-2017 va de 1144 a 2055 COP segun la plaza: una brecha de 1.8 veces. Las plazas mas baratas estan en la zona
+   productora y son tambien las mas volatiles; las mas caras son mercados de
+   destino y son mas estables. Un precio de referencia razonable es la mediana
+   (1702 COP), no la media (1639), porque la distribucion es asimetrica
+   a la izquierda (asimetria -0.44).
+
+2) A nivel de canasta, lo que mas separa a los alimentos no es el nivel sino la
+   estabilidad: el CV mediano va de 6.71% en PROCESADOS a 36.24% en
+   TUBERCULOS, RAICES Y PLATANOS (5.4 veces).
+
+3) Volatilidad y encarecimiento van juntos: r de Pearson = 0.443.
+
+ALCANCE: todos estos resultados son descriptivos y de asociacion. No se ha
+realizado ninguna prueba de hipotesis ni se afirma relacion causal alguna.
+
+
+==============================================================================
+FIN DEL ANALISIS
+==============================================================================
+Figuras en: salidas/figuras 
+Tablas  en: salidas/tablas 
