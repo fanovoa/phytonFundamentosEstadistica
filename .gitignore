@@ -49,3 +49,6 @@ desktop.ini
 # ---------- Datasets grandes (>100MB, viven solo en disco) ----------
 Consumer_behavior.csv
 household_power_consumption.txt
+
+# ---------- Modelos entrenados (se regeneran al ejecutar el notebook) ----------
+sentiment_model.joblib
